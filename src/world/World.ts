@@ -237,7 +237,11 @@ export class World {
   public update(deltaTime: number): void {
     this.elapsedTime += deltaTime;
     this.mainGate.update(deltaTime);
+    this.builder.barDoor.update(deltaTime);
+    this.builder.barInteriorDoor.update(deltaTime);
     this.builder.grannyNpc?.update(deltaTime);
+    this.builder.barReceptionist?.update(deltaTime);
+    this.builder.updateBarScene(deltaTime);
 
     if (!this.isButtonPressed) {
       this.secretButtonMat.emissiveIntensity =
@@ -256,6 +260,36 @@ export class World {
         Math.PI / 2 + Math.sin(this.elapsedTime * 0.8) * 0.35;
     }
 
+  }
+
+  public get barDoorPosition(): THREE.Vector3 {
+    return this.builder.barDoor.interactionPosition;
+  }
+
+  public get isBarDoorOpen(): boolean {
+    return this.builder.barDoor.isOpen;
+  }
+
+  public openBarDoor(): void {
+    this.builder.barDoor.openDoor();
+  }
+
+  public get barInteriorDoorPosition(): THREE.Vector3 {
+    return this.builder.barInteriorDoor.interactionPosition;
+  }
+
+  public get isBarInteriorDoorOpen(): boolean {
+    return this.builder.barInteriorDoor.isOpen;
+  }
+
+  public openBarInteriorDoor(): void {
+    this.builder.barInteriorDoor.openDoor();
+  }
+
+  public isPlayerInsideBar(position: THREE.Vector3): boolean {
+    // The bar occupies the west wing, beyond either bar entrance.
+    return position.x > -15.6 && position.x < -5.45 &&
+      position.z > -19.6 && position.z < -2.4;
   }
 
   public pushDuckFromPlayer(

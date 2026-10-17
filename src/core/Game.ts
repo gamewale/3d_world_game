@@ -59,6 +59,22 @@ export class Game {
       this.interactionSystem,
       this.soundManager
     );
+    this.interactionSystem.register({
+      id: 'bar-entrance',
+      position: this.world.barDoorPosition,
+      radius: 2.5,
+      promptText: '[E] Open the bar door',
+      isEnabled: () => !this.world.isBarDoorOpen,
+      onInteract: () => this.world.openBarDoor(),
+    });
+    this.interactionSystem.register({
+      id: 'bar-interior-entrance',
+      position: this.world.barInteriorDoorPosition,
+      radius: 2.3,
+      promptText: '[E] Open the door to the bar',
+      isEnabled: () => !this.world.isBarInteriorDoorOpen,
+      onInteract: () => this.world.openBarInteriorDoor(),
+    });
 
     window.addEventListener('resize', this.onWindowResize);
   }
@@ -78,7 +94,8 @@ export class Game {
       deltaTime,
       this.input,
       this.thirdPersonCamera.yaw,
-      this.world.colliders
+      this.world.colliders,
+      this.world.isPlayerInsideBar(this.player.mesh.position)
     );
 
     this.thirdPersonCamera.update(
@@ -94,6 +111,16 @@ export class Game {
     }
     if (this.world.didPlayerTouchGranny(this.player.mesh.position)) {
       this.soundManager.playGrannyCollisionSound();
+    }
+    this.soundManager.setBarMusicActive(
+      this.world.isPlayerInsideBar(this.player.mesh.position)
+    );
+    const isInsideBar = this.world.isPlayerInsideBar(this.player.mesh.position);
+    this.hud.setBarMusicControlsActive(isInsideBar);
+    if (isInsideBar && this.input.wasKeyJustPressed('KeyN')) {
+      this.hud.showBanner(`Now playing: ${this.soundManager.nextBarTrack()}`, 2500);
+    } else if (isInsideBar && this.input.wasKeyJustPressed('KeyP')) {
+      this.hud.showBanner(`Now playing: ${this.soundManager.previousBarTrack()}`, 2500);
     }
     this.renderer.render(this.world.scene, this.camera);
     this.input.endFrame();

@@ -7,6 +7,7 @@ export class ThirdPersonCamera {
 
   public yaw = 0; // Horizontal orbit angle (radians)
   private pitch = 0.32; // Vertical orbit angle (radians)
+  private isFirstPerson = false;
 
   private readonly maxDistance = 6.5;
   private readonly minDistance = 0.8;
@@ -35,6 +36,11 @@ export class ThirdPersonCamera {
     input: InputManager,
     colliders: THREE.Box3[]
   ): void {
+    if (input.wasKeyJustPressed('KeyV')) {
+      this.isFirstPerson = !this.isFirstPerson;
+      this.target.visible = !this.isFirstPerson;
+    }
+
     this.yaw -= input.mouseDeltaX * this.mouseSensitivity;
     this.pitch += input.mouseDeltaY * this.mouseSensitivity;
 
@@ -42,8 +48,29 @@ export class ThirdPersonCamera {
     const maxPitch = 1.15;
     this.pitch = Math.max(minPitch, Math.min(maxPitch, this.pitch));
 
+    if (this.isFirstPerson) {
+      this.updateFirstPersonTransform();
+      return;
+    }
+
     const smoothFactor = 1 - Math.exp(-18 * deltaTime);
     this.updateCameraTransform(smoothFactor, colliders);
+  }
+
+  private updateFirstPersonTransform(): void {
+    const eye = new THREE.Vector3(
+      this.target.position.x,
+      this.target.position.y + 1.58,
+      this.target.position.z
+    );
+    const cosPitch = Math.cos(this.pitch);
+    const lookDirection = new THREE.Vector3(
+      -cosPitch * Math.sin(this.yaw),
+      -Math.sin(this.pitch),
+      -cosPitch * Math.cos(this.yaw)
+    );
+    this.camera.position.copy(eye);
+    this.camera.lookAt(eye.clone().add(lookDirection));
   }
 
   private updateCameraTransform(

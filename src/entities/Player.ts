@@ -24,8 +24,10 @@ export class Player {
   private walkAction: THREE.AnimationAction | null = null;
   private runAction: THREE.AnimationAction | null = null;
   private jumpAction: THREE.AnimationAction | null = null;
+  private danceAction: THREE.AnimationAction | null = null;
   private currentAction: THREE.AnimationAction | null = null;
   private isLoaded = false;
+  private isDancing = false;
 
   constructor(startPosition = new THREE.Vector3(0, 0, 26)) {
     this.mesh = new THREE.Group();
@@ -112,6 +114,23 @@ export class Player {
         this.jumpAction.clampWhenFinished = true;
       }
     });
+
+    loader.load('/models/Wave%20Hip%20Hop%20Dance.fbx', (danceFbx) => {
+      const danceClip = danceFbx.animations[0];
+      if (!danceClip || !this.mixer) return;
+
+      // The player rig uses mixamorig5 bone names while Mixamo animation
+      // exports generally use mixamorig, so match the existing player clips.
+      danceClip.tracks.forEach((track) => {
+        track.name = track.name.replace(/^mixamorig(?=[A-Z])/g, 'mixamorig5');
+      });
+      this.removeRootMotion(danceClip);
+      this.danceAction = this.mixer.clipAction(danceClip, targetModel);
+      this.danceAction.setLoop(THREE.LoopOnce, 1);
+      this.danceAction.clampWhenFinished = true;
+    }, undefined, (err) => {
+      console.warn('Could not load /models/Wave Hip Hop Dance.fbx:', err);
+    });
   }
 
   private removeRootMotion(clip: THREE.AnimationClip): void {
@@ -150,10 +169,40 @@ export class Player {
     deltaTime: number,
     input: InputManager,
     cameraYaw: number,
-    colliders: THREE.Box3[]
+    colliders: THREE.Box3[],
+    isInsideBar: boolean
   ): void {
     if (this.mixer && this.isLoaded) {
       this.mixer.update(deltaTime);
+    }
+
+    if (this.isDancing && (!isInsideBar || !this.danceAction?.isRunning())) {
+      this.isDancing = false;
+      if (!isInsideBar && this.currentAction === this.danceAction) {
+        this.setAnimation(this.idleAction);
+      }
+    }
+    if (
+      isInsideBar &&
+      input.wasKeyJustPressed('KeyD') &&
+      this.isGrounded &&
+      this.danceAction
+    ) {
+      this.isDancing = true;
+      this.velocity.x = 0;
+      this.velocity.z = 0;
+      this.danceAction.reset().setEffectiveWeight(1).fadeIn(0.15).play();
+      if (this.currentAction) this.currentAction.fadeOut(0.15);
+      this.currentAction = this.danceAction;
+    }
+
+    if (this.isDancing) {
+      // Keep the dance in place while gravity and floor collision continue.
+      this.velocity.x = 0;
+      this.velocity.z = 0;
+      this.velocity.y += this.gravity * deltaTime;
+      this.moveVerticalAxis(this.velocity.y * deltaTime, colliders);
+      return;
     }
 
     let inputX = 0;

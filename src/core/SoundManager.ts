@@ -3,6 +3,13 @@ export class SoundManager {
   private poolSplashAudio: HTMLAudioElement;
   private duckCollisionAudio: HTMLAudioElement;
   private grannyCollisionAudio: HTMLAudioElement;
+  private barMusicAudio: HTMLAudioElement;
+  private isBarMusicActive = false;
+  private barTrackIndex = 0;
+  private readonly barTracks = [
+    { path: '/bar_songs/cidxhoneysingh-song.mp3', title: 'Honey Singh' },
+    { path: '/bar_songs/TUMHARI_MAA_KI_CHOO_ALL.mp3', title: 'Tumhari Maa Ki Choo All' },
+  ];
   private audioCtx: AudioContext | null = null;
   private lastSplashTime = 0;
 
@@ -22,6 +29,8 @@ export class SoundManager {
     this.grannyCollisionAudio = new Audio('/teri-maa-ka-bosda-fat-jaga.mp3');
     this.grannyCollisionAudio.preload = 'auto';
     this.grannyCollisionAudio.volume = 1.0;
+
+    this.barMusicAudio = this.createBarTrackAudio();
 
   }
 
@@ -59,6 +68,57 @@ export class SoundManager {
     this.grannyCollisionAudio.currentTime = 0;
     this.grannyCollisionAudio.play().catch((err) => {
       console.warn('Could not play /teri-maa-ka-bosda-fat-jaga.mp3:', err);
+    });
+  }
+
+  public setBarMusicActive(active: boolean): void {
+    if (active === this.isBarMusicActive) return;
+    this.isBarMusicActive = active;
+
+    if (active) {
+      this.playBarTrack();
+    } else {
+      this.barMusicAudio.pause();
+      this.barMusicAudio.currentTime = 0;
+    }
+  }
+
+  public nextBarTrack(): string {
+    this.selectBarTrack(this.barTrackIndex + 1);
+    return this.getCurrentBarTrackTitle();
+  }
+
+  public previousBarTrack(): string {
+    this.selectBarTrack(this.barTrackIndex - 1);
+    return this.getCurrentBarTrackTitle();
+  }
+
+  public getCurrentBarTrackTitle(): string {
+    return this.barTracks[this.barTrackIndex].title;
+  }
+
+  private selectBarTrack(index: number): void {
+    this.barMusicAudio.pause();
+    this.barMusicAudio.currentTime = 0;
+    this.barTrackIndex = (index + this.barTracks.length) % this.barTracks.length;
+    this.barMusicAudio = this.createBarTrackAudio();
+    if (this.isBarMusicActive) this.playBarTrack();
+  }
+
+  private createBarTrackAudio(): HTMLAudioElement {
+    const audio = new Audio(this.barTracks[this.barTrackIndex].path);
+    audio.preload = 'auto';
+    audio.loop = false;
+    audio.volume = 0.45;
+    audio.addEventListener('ended', () => {
+      if (this.isBarMusicActive) this.nextBarTrack();
+    });
+    return audio;
+  }
+
+  private playBarTrack(): void {
+    this.barMusicAudio.play().catch((err) => {
+      console.warn(`Could not play ${this.barTracks[this.barTrackIndex].path}:`, err);
     });
   }
 

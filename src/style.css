@@ -117,3 +117,20 @@ canvas {
   letter-spacing: 0.03em;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
+
+#bar-music-controls {
+  position: absolute;
+  bottom: 58px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(18, 8, 36, 0.88);
+  border: 1px solid rgba(255, 78, 205, 0.7);
+  border-radius: 999px;
+  padding: 7px 16px;
+  color: #ffe6f7;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}

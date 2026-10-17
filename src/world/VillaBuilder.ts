@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { Granny } from '../entities/Granny';
+import { BarReceptionist } from '../entities/BarReceptionist';
+import { BarDancer } from '../entities/BarDancer';
+import { BarDoor } from './BarDoor';
 
 export class VillaBuilder {
   private scene: THREE.Scene;
@@ -10,6 +13,14 @@ export class VillaBuilder {
   public duckBaseY = -0.1;
   public duckCollider: THREE.Box3 | null = null;
   public grannyNpc: Granny | null = null;
+  public barDoor!: BarDoor;
+  public barInteriorDoor!: BarDoor;
+  public barReceptionist!: BarReceptionist;
+  private readonly barDancers: BarDancer[] = [];
+  private readonly discoLights: THREE.PointLight[] = [];
+  private readonly discoBulbs: THREE.Mesh[] = [];
+  private readonly discoBall: THREE.Mesh;
+  private discoElapsed = 0;
   public poolWaterMesh: THREE.Mesh | null = null;
 
   private perimeterWallMat: THREE.MeshStandardMaterial;
@@ -39,6 +50,16 @@ export class VillaBuilder {
       color: 0x8d99ae,
       roughness: 0.7,
     });
+
+    this.discoBall = new THREE.Mesh(
+      new THREE.SphereGeometry(0.34, 24, 18),
+      new THREE.MeshStandardMaterial({
+        color: 0xcbd0df,
+        metalness: 0.92,
+        roughness: 0.14,
+        emissive: 0x171725,
+      })
+    );
   }
 
   public build(): void {
@@ -528,12 +549,33 @@ export class VillaBuilder {
       this.outerVillaWallMat,
       true
     );
+    // Leave a proper opening in the west wall for the bar entrance.
     this.addWallBlock(
-      [0.8, wallH, 18.8],
-      [-16, wallY, -11],
+      [0.8, wallH, 5.6],
+      [-16, wallY, -17.6],
       this.outerVillaWallMat,
       true
     );
+    this.addWallBlock(
+      [0.8, wallH, 11.6],
+      [-16, wallY, -7.4],
+      this.outerVillaWallMat,
+      true
+    );
+    this.addWallBlock(
+      [0.8, 1.5, 1.6],
+      [-16, 3.45, -14],
+      this.outerVillaWallMat,
+      true
+    );
+    this.barDoor = new BarDoor(this.scene, this.colliders, {
+      interactionPosition: new THREE.Vector3(-17.1, 0, -14),
+      frameX: -15.53,
+      hingeX: -15.52,
+      centerZ: -14,
+      openingWidth: 1.6,
+      swingDirection: 1,
+    });
     this.addWallBlock(
       [0.8, wallH, 18.8],
       [16, wallY, -11],
@@ -560,23 +602,31 @@ export class VillaBuilder {
     );
 
     this.addWallBlock(
-      [0.5, wallH, 5.9],
-      [-5, wallY, -4.95],
+      [0.5, wallH, 6.7],
+      [-5, wallY, -5.35],
       this.interiorVillaWallMat,
       true
     );
     this.addWallBlock(
-      [0.5, wallH, 8.9],
-      [-5, wallY, -15.55],
+      [0.5, wallH, 9.7],
+      [-5, wallY, -15.15],
       this.interiorVillaWallMat,
       true
     );
     this.addWallBlock(
-      [0.5, 1.2, 3.2],
+      [0.5, 1.2, 1.6],
       [-5, 3.6, -9.5],
       this.interiorVillaWallMat,
       true
     );
+    this.barInteriorDoor = new BarDoor(this.scene, this.colliders, {
+      interactionPosition: new THREE.Vector3(-3.8, 0, -9.5),
+      frameX: -5.27,
+      hingeX: -5.28,
+      centerZ: -9.5,
+      openingWidth: 1.6,
+      swingDirection: -1,
+    });
 
     this.addWallBlock(
       [0.5, wallH, 5.9],
@@ -651,6 +701,197 @@ export class VillaBuilder {
     this.populateRooms();
   }
 
+  private addBarDrinks(): void {
+    const bottleMaterials = [0x4f7e42, 0xb87931, 0x466f9e].map(
+      (color) => new THREE.MeshStandardMaterial({ color, roughness: 0.35, metalness: 0.08 })
+    );
+    const labelMat = new THREE.MeshStandardMaterial({ color: 0xf1dfb0, roughness: 0.7 });
+    const capMat = new THREE.MeshStandardMaterial({ color: 0xc89a54, metalness: 0.55, roughness: 0.35 });
+    const bottleXs = [-12.45, -10.15, -7.85];
+
+    bottleXs.forEach((x, index) => {
+      const bottle = new THREE.Group();
+      const body = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.075, 0.09, 0.3, 16),
+        bottleMaterials[index]
+      );
+      body.position.y = 1.25;
+      const neck = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.033, 0.05, 0.12, 12),
+        bottleMaterials[index]
+      );
+      neck.position.y = 1.46;
+      const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.034, 0.045, 12), capMat);
+      cap.position.y = 1.54;
+      const label = new THREE.Mesh(new THREE.BoxGeometry(0.105, 0.105, 0.008), labelMat);
+      label.position.set(0, 1.25, 0.087);
+      bottle.add(body, neck, cap, label);
+      bottle.position.set(x, 0, -16.42);
+      bottle.traverse((part) => {
+        if ((part as THREE.Mesh).isMesh) {
+          (part as THREE.Mesh).castShadow = true;
+          (part as THREE.Mesh).receiveShadow = true;
+        }
+      });
+      this.scene.add(bottle);
+    });
+
+    const glass = new THREE.MeshStandardMaterial({
+      color: 0xe8f1f2,
+      roughness: 0.15,
+      metalness: 0.05,
+      transparent: true,
+      opacity: 0.38,
+      depthWrite: false,
+    });
+    const drinkMaterials = [0xe9a23b, 0xd84a63, 0x75c4b0].map(
+      (color) => new THREE.MeshStandardMaterial({ color, roughness: 0.3, metalness: 0.04 })
+    );
+    const strawMat = new THREE.MeshStandardMaterial({ color: 0xf3ead7, roughness: 0.45 });
+    const glassXs = [-11.65, -9.35, -8.65];
+
+    glassXs.forEach((x, index) => {
+      const cup = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.075, 0.06, 0.28, 16, 1, true),
+        glass
+      );
+      cup.position.set(x, 1.24, -16.42);
+      cup.castShadow = true;
+      this.scene.add(cup);
+
+      const liquid = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.058, 0.052, 0.13, 14),
+        drinkMaterials[index]
+      );
+      liquid.position.set(x, 1.17, -16.42);
+      this.scene.add(liquid);
+
+      const straw = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.22, 8), strawMat);
+      straw.position.set(x + 0.025, 1.38, -16.42);
+      straw.rotation.z = -0.12;
+      this.scene.add(straw);
+    });
+  }
+
+  private buildBarStage(): void {
+    const stageMat = new THREE.MeshStandardMaterial({
+      color: 0x251330,
+      roughness: 0.38,
+      metalness: 0.3,
+    });
+    const stageTopMat = new THREE.MeshStandardMaterial({
+      color: 0x17121f,
+      roughness: 0.24,
+      metalness: 0.42,
+    });
+    const neonPink = new THREE.MeshStandardMaterial({
+      color: 0xff3fb4,
+      emissive: 0xff168f,
+      emissiveIntensity: 1.3,
+      roughness: 0.25,
+    });
+    const neonCyan = new THREE.MeshStandardMaterial({
+      color: 0x22e4e8,
+      emissive: 0x08cdd7,
+      emissiveIntensity: 1.0,
+      roughness: 0.25,
+    });
+
+    this.addBlock([6.4, 0.38, 2.3], [-12.2, 0.29, -6.8], stageMat, true);
+    this.addBlock([6.28, 0.035, 2.18], [-12.2, 0.498, -6.8], stageTopMat, false);
+    this.addBlock([2.5, 0.16, 0.52], [-12.2, 0.18, -5.35], stageMat, true);
+    this.addBlock([6.15, 0.035, 0.045], [-12.2, 0.39, -5.65], neonPink, false);
+    this.addBlock([0.045, 0.035, 2.1], [-15.36, 0.39, -6.8], neonCyan, false);
+    this.addBlock([0.045, 0.035, 2.1], [-9.04, 0.39, -6.8], neonCyan, false);
+
+    const floorMat = new THREE.MeshStandardMaterial({
+      color: 0x151020,
+      roughness: 0.25,
+      metalness: 0.38,
+    });
+    this.addBlock([7.0, 0.035, 4.0], [-12.2, 0.12, -11.1], floorMat, false);
+    const tileMaterials = [neonPink, neonCyan];
+    for (let column = 0; column < 4; column++) {
+      for (let row = 0; row < 2; row++) {
+        const tile = new THREE.Mesh(
+          new THREE.BoxGeometry(1.57, 0.018, 1.86),
+          tileMaterials[(column + row) % tileMaterials.length]
+        );
+        tile.position.set(-14.825 + column * 1.75, 0.15, -12.08 + row * 1.96);
+        tile.receiveShadow = true;
+        this.scene.add(tile);
+      }
+    }
+
+    // Suspended truss, mirror ball, and low moving color washes over the floor.
+    const trussMat = new THREE.MeshStandardMaterial({
+      color: 0x292333,
+      metalness: 0.72,
+      roughness: 0.34,
+    });
+    const truss = new THREE.Mesh(new THREE.BoxGeometry(7.0, 0.1, 0.12), trussMat);
+    truss.position.set(-12.2, 3.82, -6.8);
+    truss.castShadow = true;
+    this.scene.add(truss);
+    this.discoBall.position.set(-12.2, 3.48, -9.2);
+    this.discoBall.castShadow = true;
+    this.scene.add(this.discoBall);
+
+    const colors = [0xff3fb4, 0x23e6f0, 0x8b5cff];
+    colors.forEach((color) => {
+      const light = new THREE.PointLight(color, 30, 8.5, 2);
+      light.position.set(-12.2, 3.35, -9.2);
+      this.scene.add(light);
+      this.discoLights.push(light);
+
+      const bulbMat = new THREE.MeshStandardMaterial({
+        color,
+        emissive: color,
+        emissiveIntensity: 2.2,
+        roughness: 0.22,
+      });
+      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 10), bulbMat);
+      bulb.position.copy(light.position);
+      this.scene.add(bulb);
+      this.discoBulbs.push(bulb);
+    });
+
+    const dancers = [
+      { x: -13.15, yaw: 0.48 },
+      { x: -11.25, yaw: -0.48 },
+    ];
+    for (const dancer of dancers) {
+      const npc = new BarDancer(
+        new THREE.Vector3(dancer.x, 0.48, -6.82),
+        dancer.yaw
+      );
+      this.barDancers.push(npc);
+      this.colliders.push(npc.collider);
+      this.scene.add(npc.group);
+    }
+  }
+
+  public updateBarScene(deltaTime: number): void {
+    this.discoElapsed += deltaTime;
+    this.discoBall.rotation.y += deltaTime * 0.45;
+    this.discoBall.rotation.x = Math.sin(this.discoElapsed * 0.35) * 0.12;
+    this.barDancers.forEach((dancer) => dancer.update(deltaTime));
+
+    const centerX = -12.2;
+    const centerZ = -9.2;
+    this.discoLights.forEach((light, index) => {
+      const phase = this.discoElapsed * 0.65 + (index * Math.PI * 2) / this.discoLights.length;
+      const x = centerX + Math.cos(phase) * 2.1;
+      const z = centerZ + Math.sin(phase) * 1.7;
+      light.position.set(x, 3.35, z);
+      this.discoBulbs[index].position.copy(light.position);
+      light.color.setHSL((0.82 + index * 0.34 + this.discoElapsed * 0.08) % 1, 0.88, 0.58);
+      const material = this.discoBulbs[index].material as THREE.MeshStandardMaterial;
+      material.color.copy(light.color);
+      material.emissive.copy(light.color);
+    });
+  }
+
   private populateRooms(): void {
     const foyerLight = new THREE.PointLight(0xffb703, 30, 18);
     foyerLight.position.set(1.5, 3.7, -8);
@@ -677,10 +918,17 @@ export class VillaBuilder {
       roughness: 0.3,
     });
 
-    this.addBlock([1.2, 1.1, 6.5], [-13.2, 0.55, -14], barCounterMat, true);
-    this.addBlock([0.6, 0.75, 0.6], [-11.5, 0.375, -12], stoolMat, true);
-    this.addBlock([0.6, 0.75, 0.6], [-11.5, 0.375, -14], stoolMat, true);
-    this.addBlock([0.6, 0.75, 0.6], [-11.5, 0.375, -16], stoolMat, true);
+    // Turn the long counter parallel to the back wall; keep a clear route
+    // from both entrances and line up the stools along its serving side.
+    this.addBlock([6.5, 1.1, 1.2], [-10.25, 0.55, -16.8], barCounterMat, true);
+    this.addBlock([0.6, 0.75, 0.6], [-12.7, 0.375, -15.55], stoolMat, true);
+    this.addBlock([0.6, 0.75, 0.6], [-10.25, 0.375, -15.55], stoolMat, true);
+    this.addBlock([0.6, 0.75, 0.6], [-7.8, 0.375, -15.55], stoolMat, true);
+    this.addBarDrinks();
+    this.barReceptionist = new BarReceptionist(new THREE.Vector3(-10.25, 0, -17.35));
+    this.scene.add(this.barReceptionist.group);
+    this.addBarSpeaker();
+    this.buildBarStage();
 
     const barSignTex = this.createNeonSignTexture(
       'VICE BAR',
@@ -697,7 +945,7 @@ export class VillaBuilder {
       new THREE.BoxGeometry(3.8, 0.95, 0.12),
       barSignMat
     );
-    barSign.position.set(-15.5, 2.5, -14);
+    barSign.position.set(-16.52, 3.55, -14);
     barSign.rotation.y = Math.PI / 2;
     this.scene.add(barSign);
 
@@ -727,6 +975,38 @@ export class VillaBuilder {
 
     this.addBlock([1.0, 0.35, 2.1], [8.5, 4.48, -6.5], stoolMat, true);
     this.addBlock([1.0, 0.35, 2.1], [11.0, 4.48, -6.5], stoolMat, true);
+  }
+
+  private addBarSpeaker(): void {
+    const cabinetMat = new THREE.MeshStandardMaterial({ color: 0x17151d, roughness: 0.48, metalness: 0.2 });
+    const rimMat = new THREE.MeshStandardMaterial({ color: 0x45404f, roughness: 0.38, metalness: 0.55 });
+    const coneMat = new THREE.MeshStandardMaterial({ color: 0x08080b, roughness: 0.8 });
+    const speaker = new THREE.Group();
+    speaker.name = 'Bar Speaker';
+    speaker.position.set(-15.25, 2.65, -11.25);
+
+    const cabinet = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.45, 0.85), cabinetMat);
+    cabinet.castShadow = true;
+    cabinet.receiveShadow = true;
+    speaker.add(cabinet);
+
+    for (const y of [-0.38, 0.32]) {
+      const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.06, 24), rimMat);
+      rim.rotation.z = Math.PI / 2;
+      rim.position.set(0.27, y, 0);
+      speaker.add(rim);
+
+      const cone = new THREE.Mesh(new THREE.CylinderGeometry(0.205, 0.14, 0.065, 24), coneMat);
+      cone.rotation.z = Math.PI / 2;
+      cone.position.set(0.31, y, 0);
+      speaker.add(cone);
+
+      const dustCap = new THREE.Mesh(new THREE.SphereGeometry(0.07, 16, 12), rimMat);
+      dustCap.scale.set(0.38, 1, 1);
+      dustCap.position.set(0.35, y, 0);
+      speaker.add(dustCap);
+    }
+    this.scene.add(speaker);
   }
 
   private buildTropicalTrees(): void {

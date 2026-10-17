@@ -3,6 +3,7 @@ export class HUD {
   private objectiveEl: HTMLElement;
   private bannerEl: HTMLElement;
   private interactEl: HTMLElement;
+  private barMusicControlsEl: HTMLElement;
   private bannerTimeout: number | null = null;
 
   constructor() {
@@ -10,6 +11,7 @@ export class HUD {
     this.objectiveEl = document.getElementById('objective-text')!;
     this.bannerEl = document.getElementById('status-banner')!;
     this.interactEl = document.getElementById('interaction-prompt')!;
+    this.barMusicControlsEl = document.getElementById('bar-music-controls')!;
   }
 
   public setObjective(badgeText: string, objectiveText: string): void {
@@ -47,5 +49,10 @@ export class HUD {
     } else {
       this.interactEl.classList.add('hidden');
     }
+  }
+
+  public setBarMusicControlsActive(active: boolean): void {
+    if (!this.barMusicControlsEl) return;
+    this.barMusicControlsEl.classList.toggle('hidden', !active);
   }
 }
