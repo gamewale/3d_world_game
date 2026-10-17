@@ -16,6 +16,7 @@ export class World {
   private elapsedTime = 0;
   private isButtonPressed = false;
   private duckCollisionActive = false;
+  private grannyCollisionActive = false;
   private readonly duckVelocity = new THREE.Vector3();
 
   constructor() {
@@ -236,6 +237,7 @@ export class World {
   public update(deltaTime: number): void {
     this.elapsedTime += deltaTime;
     this.mainGate.update(deltaTime);
+    this.builder.grannyNpc?.update(deltaTime);
 
     if (!this.isButtonPressed) {
       this.secretButtonMat.emissiveIntensity =
@@ -254,11 +256,6 @@ export class World {
         Math.PI / 2 + Math.sin(this.elapsedTime * 0.8) * 0.35;
     }
 
-    if (this.builder.fountainStatue) {
-      this.builder.fountainStatue.rotation.y += deltaTime * 1.4;
-      this.builder.fountainStatue.position.y =
-        2.5 + Math.sin(this.elapsedTime * 3.0) * 0.12;
-    }
   }
 
   public pushDuckFromPlayer(
@@ -316,4 +313,31 @@ export class World {
     collider.translate(new THREE.Vector3(movedX, 0, movedZ));
     return shouldPlaySound;
   }
+
+  public didPlayerTouchGranny(playerPosition: THREE.Vector3): boolean {
+    const collider = this.builder.grannyNpc?.collider;
+    if (!collider) return false;
+
+    const playerBox = new THREE.Box3(
+      new THREE.Vector3(
+        playerPosition.x - 0.45,
+        playerPosition.y + 0.02,
+        playerPosition.z - 0.45
+      ),
+      new THREE.Vector3(
+        playerPosition.x + 0.45,
+        playerPosition.y + 1.8,
+        playerPosition.z + 0.45
+      )
+    );
+    // Player movement rolls back the attempted step on solid colliders, so
+    // the two boxes will not overlap when this is checked after movement.
+    // A small tolerance catches physical contact at the resolved boundary.
+    playerBox.expandByVector(new THREE.Vector3(0.08, 0, 0.08));
+    const touching = playerBox.intersectsBox(collider);
+    const shouldPlaySound = touching && !this.grannyCollisionActive;
+    this.grannyCollisionActive = touching;
+    return shouldPlaySound;
+  }
+
 }

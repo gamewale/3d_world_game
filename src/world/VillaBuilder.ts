@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { Granny } from '../entities/Granny';
 
 export class VillaBuilder {
   private scene: THREE.Scene;
@@ -8,7 +9,7 @@ export class VillaBuilder {
   public duckGroup: THREE.Group | null = null;
   public duckBaseY = -0.1;
   public duckCollider: THREE.Box3 | null = null;
-  public fountainStatue: THREE.Group | null = null;
+  public grannyNpc: Granny | null = null;
   public poolWaterMesh: THREE.Mesh | null = null;
 
   private perimeterWallMat: THREE.MeshStandardMaterial;
@@ -46,6 +47,7 @@ export class VillaBuilder {
     this.buildPerimeterWalls();
     this.buildExpandedVilla();
     this.buildTropicalTrees();
+    this.addGrannyNPC();
 
     this.loadPlasterWallGLTF();
     this.loadPathwayGLTF();
@@ -433,13 +435,13 @@ export class VillaBuilder {
 
     const waterGeo = new THREE.PlaneGeometry(8.8, 9.8, 24, 24);
     const waterMat = new THREE.MeshStandardMaterial({
-      color: 0x00bbf9,
-      emissive: 0x0077b6,
-      emissiveIntensity: 0.35,
-      roughness: 0.08,
-      metalness: 0.1,
+      color: 0x39b9d7,
+      emissive: 0x001820,
+      emissiveIntensity: 0.08,
+      roughness: 0.2,
+      metalness: 0.02,
       transparent: true,
-      opacity: 0.68,
+      opacity: 0.78,
       side: THREE.DoubleSide,
     });
     this.poolWaterMesh = new THREE.Mesh(waterGeo, waterMat);
@@ -448,32 +450,7 @@ export class VillaBuilder {
     this.poolWaterMesh.receiveShadow = true;
     this.scene.add(this.poolWaterMesh);
 
-    this.loadPoolsideFurniture();
     this.loadPoolDuck();
-
-    const fountainBaseMat = new THREE.MeshStandardMaterial({
-      color: 0xff4ecd,
-      roughness: 0.4,
-    });
-    const goldMat = new THREE.MeshStandardMaterial({
-      color: 0xffbe0b,
-      metalness: 0.85,
-      roughness: 0.15,
-    });
-
-    this.addBlock([4.5, 0.5, 4.5], [-11.5, 0.25, 9], poolCopingMat, true);
-    this.addBlock([4.0, 0.55, 4.0], [-11.5, 0.28, 9], waterMat, false);
-    this.addBlock([1.6, 1.8, 1.6], [-11.5, 1.1, 9], fountainBaseMat, true);
-
-    this.fountainStatue = new THREE.Group();
-    this.fountainStatue.position.set(-11.5, 2.5, 9);
-    const diamond = new THREE.Mesh(
-      new THREE.OctahedronGeometry(0.75, 0),
-      goldMat
-    );
-    diamond.castShadow = true;
-    this.fountainStatue.add(diamond);
-    this.scene.add(this.fountainStatue);
   }
 
   private buildPerimeterWalls(): void {
@@ -806,76 +783,13 @@ export class VillaBuilder {
     );
   }
 
-  private loadPoolsideFurniture(): void {
-    const loader = new GLTFLoader();
-    loader.load(
-      '/models/coffee_table_round_01_1k.gltf/coffee_table_round_01_1k.gltf',
-      (tableGltf) => {
-        const table = tableGltf.scene;
-        table.updateMatrixWorld(true);
-        const bounds = new THREE.Box3().setFromObject(table);
-        const size = bounds.getSize(new THREE.Vector3());
-        if (size.y <= 0) return;
-
-        const scale = 1.1 / size.y;
-        const tablePosition = new THREE.Vector3(3.25, -bounds.min.y * scale, 9.0);
-        table.scale.setScalar(scale);
-        table.position.copy(tablePosition);
-        table.traverse((child) => {
-          const mesh = child as THREE.Mesh;
-          if (mesh.isMesh) {
-            mesh.castShadow = true;
-            mesh.receiveShadow = true;
-          }
-        });
-        this.scene.add(table);
-        this.colliders.push(
-          new THREE.Box3(
-            new THREE.Vector3(
-              tablePosition.x - size.x * scale * 0.5,
-              0,
-              tablePosition.z - size.z * scale * 0.5
-            ),
-            new THREE.Vector3(
-              tablePosition.x + size.x * scale * 0.5,
-              1.1,
-              tablePosition.z + size.z * scale * 0.5
-            )
-          )
-        );
-
-        const teaLoader = new GLTFLoader();
-        teaLoader.load(
-          '/models/tea_set_01_1k.gltf/tea_set_01_1k.gltf',
-          (teaGltf) => {
-            const teaSet = teaGltf.scene;
-            teaSet.updateMatrixWorld(true);
-            const teaBounds = new THREE.Box3().setFromObject(teaSet);
-            const teaSize = teaBounds.getSize(new THREE.Vector3());
-            const teaScale = Math.min(1.0 / teaSize.x, 1.0 / teaSize.z);
-            teaSet.scale.setScalar(teaScale);
-            teaSet.position.set(
-              tablePosition.x,
-              tablePosition.y + 1.1 - teaBounds.min.y * teaScale,
-              tablePosition.z
-            );
-            teaSet.traverse((child) => {
-              const mesh = child as THREE.Mesh;
-              if (mesh.isMesh) {
-                mesh.castShadow = true;
-                mesh.receiveShadow = true;
-              }
-            });
-            this.scene.add(teaSet);
-          },
-          undefined,
-          (error) => console.error('Could not load tea_set_01_1k.gltf', error)
-        );
-      },
-      undefined,
-      (error) =>
-        console.error('Could not load coffee_table_round_01_1k.gltf', error)
-    );
+  private addGrannyNPC(): void {
+    // Keep granny in the initial camera view beside the entrance path and trees.
+    const granny = new Granny(new THREE.Vector3(2.5, 0, 22.5));
+    granny.group.scale.setScalar(1.18);
+    this.grannyNpc = granny;
+    this.scene.add(granny.group);
+    this.colliders.push(granny.collider);
   }
 
   private loadPoolDuck(): void {
@@ -943,11 +857,22 @@ export class VillaBuilder {
                   }
                 }
                 // Keep the duck visibly yellow even if the texture is unavailable.
-                material.color.set(0xffdf00);
+                // The texture carries the bill and eyes, so leave its RGB values
+                // un-tinted after the orange body has been shifted toward yellow.
+                material.color.set(material.map ? 0xffffff : 0xffdf00);
                 material.emissive.set(0x000000);
                 material.emissiveIntensity = 0;
                 material.metalness = 0;
-                material.roughness = 0.45;
+                material.metalnessMap = null;
+                material.roughnessMap = null;
+                material.roughness = 0.58;
+                material.transparent = false;
+                material.opacity = 1;
+                material.alphaTest = 0;
+                material.alphaMap = null;
+                material.blending = THREE.NormalBlending;
+                material.depthWrite = true;
+                material.needsUpdate = true;
               }
             }
           }

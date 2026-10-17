@@ -71,6 +71,9 @@ export class Game {
   private update = (): void => {
     const deltaTime = Math.min(this.clock.getDelta(), 0.1);
 
+    // Move NPCs and refresh their colliders before resolving player movement.
+    this.world.update(deltaTime);
+
     this.player.update(
       deltaTime,
       this.input,
@@ -89,8 +92,9 @@ export class Game {
     if (this.world.pushDuckFromPlayer(this.player.mesh.position, deltaTime)) {
       this.soundManager.playDuckCollisionSound();
     }
-    this.world.update(deltaTime);
-
+    if (this.world.didPlayerTouchGranny(this.player.mesh.position)) {
+      this.soundManager.playGrannyCollisionSound();
+    }
     this.renderer.render(this.world.scene, this.camera);
     this.input.endFrame();
   };

@@ -2,6 +2,7 @@ export class SoundManager {
   private trapAudio: HTMLAudioElement;
   private poolSplashAudio: HTMLAudioElement;
   private duckCollisionAudio: HTMLAudioElement;
+  private grannyCollisionAudio: HTMLAudioElement;
   private audioCtx: AudioContext | null = null;
   private lastSplashTime = 0;
 
@@ -17,6 +18,11 @@ export class SoundManager {
     this.duckCollisionAudio = new Audio('/teri-maa-ka-bosda-fat-jaga.mp3');
     this.duckCollisionAudio.preload = 'auto';
     this.duckCollisionAudio.volume = 1.0;
+
+    this.grannyCollisionAudio = new Audio('/teri-maa-ka-bosda-fat-jaga.mp3');
+    this.grannyCollisionAudio.preload = 'auto';
+    this.grannyCollisionAudio.volume = 1.0;
+
   }
 
   public playTrapSound(): void {
@@ -45,6 +51,13 @@ export class SoundManager {
   public playDuckCollisionSound(): void {
     this.duckCollisionAudio.currentTime = 0;
     this.duckCollisionAudio.play().catch((err) => {
+      console.warn('Could not play /teri-maa-ka-bosda-fat-jaga.mp3:', err);
+    });
+  }
+
+  public playGrannyCollisionSound(): void {
+    this.grannyCollisionAudio.currentTime = 0;
+    this.grannyCollisionAudio.play().catch((err) => {
       console.warn('Could not play /teri-maa-ka-bosda-fat-jaga.mp3:', err);
     });
   }
