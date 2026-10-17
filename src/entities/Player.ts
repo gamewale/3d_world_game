@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import { InputManager } from '../core/InputManager';
-import { SoundManager } from '../core/SoundManager';
 
 export class Player {
   public readonly mesh: THREE.Group;
@@ -17,7 +16,6 @@ export class Player {
   private readonly stepHeight = 0.48;
 
   private isGrounded = true;
-  private isInWater = false;
   private currentFacingAngle = 0;
 
   // Animation system
@@ -152,18 +150,10 @@ export class Player {
     deltaTime: number,
     input: InputManager,
     cameraYaw: number,
-    colliders: THREE.Box3[],
-    soundManager: SoundManager
+    colliders: THREE.Box3[]
   ): void {
     if (this.mixer && this.isLoaded) {
       this.mixer.update(deltaTime);
-    }
-
-    const wasInWater = this.isInWater;
-    this.isInWater = this.isOverPoolBasin() && this.mesh.position.y < -0.15;
-
-    if (!wasInWater && this.isInWater) {
-      soundManager.playPoolSplashSound();
     }
 
     let inputX = 0;
@@ -182,9 +172,7 @@ export class Player {
       moveDir.normalize();
       moveDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), cameraYaw);
 
-      const waterDrag = this.isInWater ? 0.72 : 1.0;
-      const speed =
-        (isSprinting ? this.sprintSpeed : this.walkSpeed) * waterDrag;
+      const speed = isSprinting ? this.sprintSpeed : this.walkSpeed;
 
       this.velocity.x = moveDir.x * speed;
       this.velocity.z = moveDir.z * speed;
@@ -197,7 +185,7 @@ export class Player {
       );
       this.mesh.rotation.y = this.currentFacingAngle;
 
-      if (this.isGrounded && !this.isInWater) {
+      if (this.isGrounded) {
         if (isSprinting && this.runAction) {
           this.setAnimation(this.runAction);
         } else if (this.walkAction) {
@@ -214,16 +202,15 @@ export class Player {
       }
     }
 
-    if ((this.isGrounded || this.isInWater) && input.wasKeyJustPressed('Space')) {
-      this.velocity.y = this.isInWater ? 8.8 : this.jumpVelocity;
+    if (this.isGrounded && input.wasKeyJustPressed('Space')) {
+      this.velocity.y = this.jumpVelocity;
       this.isGrounded = false;
       if (this.jumpAction) {
         this.setAnimation(this.jumpAction, 0.1);
       }
     }
 
-    const effectiveGravity = this.isInWater ? this.gravity * 0.55 : this.gravity;
-    this.velocity.y += effectiveGravity * deltaTime;
+    this.velocity.y += this.gravity * deltaTime;
 
     this.moveHorizontalAxis('x', this.velocity.x * deltaTime, colliders);
     this.moveHorizontalAxis('z', this.velocity.z * deltaTime, colliders);
@@ -283,6 +270,7 @@ export class Player {
     const hitBoxes = this.getIntersectingBoxes(colliders);
 
     if (deltaY <= 0) {
+      // The pool basin top is at -1.25m; let the player walk on that bottom.
       let highestFloor = this.isOverPoolBasin() ? -1.25 : 0;
 
       for (const box of hitBoxes) {

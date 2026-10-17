@@ -5,7 +5,9 @@ export class VillaBuilder {
   private scene: THREE.Scene;
   private colliders: THREE.Box3[];
 
-  public flamingoGroup: THREE.Group | null = null;
+  public duckGroup: THREE.Group | null = null;
+  public duckBaseY = -0.1;
+  public duckCollider: THREE.Box3 | null = null;
   public fountainStatue: THREE.Group | null = null;
   public poolWaterMesh: THREE.Mesh | null = null;
 
@@ -429,10 +431,6 @@ export class VillaBuilder {
     this.addBlock([2.2, 0.7, 0.75], [8.3, -0.9, 5.45], stepMat, true);
     this.addBlock([2.2, 1.05, 0.75], [8.3, -0.725, 4.7], stepMat, true);
 
-    const poolLight = new THREE.PointLight(0x00f5d4, 25, 14);
-    poolLight.position.set(11.5, -0.6, 9.0);
-    this.scene.add(poolLight);
-
     const waterGeo = new THREE.PlaneGeometry(8.8, 9.8, 24, 24);
     const waterMat = new THREE.MeshStandardMaterial({
       color: 0x00bbf9,
@@ -450,71 +448,8 @@ export class VillaBuilder {
     this.poolWaterMesh.receiveShadow = true;
     this.scene.add(this.poolWaterMesh);
 
-    const boardMat = new THREE.MeshStandardMaterial({
-      color: 0x00f5d4,
-      roughness: 0.3,
-    });
-    this.addBlock([1.2, 0.35, 0.8], [11.5, 0.175, 14.5], poolCopingMat, true);
-    this.addBlock([1.1, 0.12, 2.7], [11.5, 0.4, 13.4], boardMat, true);
-
-    const chairMat = new THREE.MeshStandardMaterial({
-      color: 0xff4ecd,
-      roughness: 0.5,
-    });
-    this.addBlock([1.0, 0.35, 2.1], [5.0, 0.175, 7.0], chairMat, true);
-    this.addBlock([1.0, 0.35, 2.1], [5.0, 0.175, 11.0], chairMat, true);
-
-    const poleMat = new THREE.MeshStandardMaterial({ color: 0xf8f9fa });
-    const umbrellaMat = new THREE.MeshStandardMaterial({
-      color: 0xffbe0b,
-      roughness: 0.4,
-    });
-    this.addBlock([0.18, 2.6, 0.18], [5.0, 1.3, 9.0], poleMat, true);
-    this.addBlock([2.8, 0.25, 2.8], [5.0, 2.6, 9.0], umbrellaMat, false);
-    this.addBlock([1.6, 0.25, 1.6], [5.0, 2.85, 9.0], chairMat, false);
-
-    this.flamingoGroup = new THREE.Group();
-    this.flamingoGroup.position.set(12.2, -0.1, 8.8);
-
-    const flamingoMat = new THREE.MeshStandardMaterial({
-      color: 0xff2a85,
-      emissive: 0xff2a85,
-      emissiveIntensity: 0.2,
-      roughness: 0.3,
-    });
-    const beakMat = new THREE.MeshStandardMaterial({ color: 0xffbe0b });
-
-    const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(0.85, 0.32, 12, 24),
-      flamingoMat
-    );
-    ring.rotation.x = Math.PI / 2;
-    ring.castShadow = true;
-    this.flamingoGroup.add(ring);
-
-    const neck = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.16, 0.22, 1.1, 12),
-      flamingoMat
-    );
-    neck.position.set(0, 0.65, 0.75);
-    neck.castShadow = true;
-    this.flamingoGroup.add(neck);
-
-    const head = new THREE.Mesh(
-      new THREE.BoxGeometry(0.36, 0.32, 0.45),
-      flamingoMat
-    );
-    head.position.set(0, 1.2, 0.85);
-    this.flamingoGroup.add(head);
-
-    const beak = new THREE.Mesh(
-      new THREE.BoxGeometry(0.22, 0.18, 0.35),
-      beakMat
-    );
-    beak.position.set(0, 1.14, 1.18);
-    this.flamingoGroup.add(beak);
-
-    this.scene.add(this.flamingoGroup);
+    this.loadPoolsideFurniture();
+    this.loadPoolDuck();
 
     const fountainBaseMat = new THREE.MeshStandardMaterial({
       color: 0xff4ecd,
@@ -818,15 +753,6 @@ export class VillaBuilder {
   }
 
   private buildTropicalTrees(): void {
-    const trunkMat = new THREE.MeshStandardMaterial({
-      color: 0x8d5524,
-      roughness: 0.9,
-    });
-    const leafMat = new THREE.MeshStandardMaterial({
-      color: 0x06d6a0,
-      roughness: 0.6,
-    });
-
     const palmCoords: [number, number][] = [
       [-17, 14],
       [-18, 4],
@@ -836,11 +762,207 @@ export class VillaBuilder {
       [-14, 22.4],
       [14, 22.4],
     ];
+    const loader = new GLTFLoader();
+    loader.load(
+      '/models/tree_small_02_1k.gltf/tree_small_02_1k.gltf',
+      (gltf) => {
+        const prototype = gltf.scene;
+        prototype.updateMatrixWorld(true);
+        const bounds = new THREE.Box3().setFromObject(prototype);
+        const size = bounds.getSize(new THREE.Vector3());
+        if (size.y <= 0) return;
 
-    for (const [x, z] of palmCoords) {
-      this.addBlock([0.7, 4.8, 0.7], [x, 2.4, z], trunkMat, true);
-      this.addBlock([3.6, 1.1, 3.6], [x, 5.1, z], leafMat, false);
-      this.addBlock([2.2, 0.9, 2.2], [x, 5.9, z], leafMat, false);
-    }
+        // Normalize the asset to the existing ~6m tree height and place its base on the ground.
+        const scale = 6 / size.y;
+        for (const [x, z] of palmCoords) {
+          const tree = prototype.clone(true);
+          tree.scale.setScalar(scale);
+          tree.position.set(x, -bounds.min.y * scale, z);
+          tree.traverse((child) => {
+            const mesh = child as THREE.Mesh;
+            if (mesh.isMesh) {
+              mesh.castShadow = true;
+              mesh.receiveShadow = true;
+            }
+          });
+          this.scene.add(tree);
+
+          const scaledBounds = new THREE.Box3().setFromObject(tree);
+          const trunkRadius = Math.min(size.x, size.z) * scale * 0.18;
+          this.colliders.push(
+            new THREE.Box3(
+              new THREE.Vector3(x - trunkRadius, 0, z - trunkRadius),
+              new THREE.Vector3(
+                x + trunkRadius,
+                Math.min(4.8, scaledBounds.max.y),
+                z + trunkRadius
+              )
+            )
+          );
+        }
+      },
+      undefined,
+      (error) => console.error('Could not load tree_small_02_1k.gltf', error)
+    );
+  }
+
+  private loadPoolsideFurniture(): void {
+    const loader = new GLTFLoader();
+    loader.load(
+      '/models/coffee_table_round_01_1k.gltf/coffee_table_round_01_1k.gltf',
+      (tableGltf) => {
+        const table = tableGltf.scene;
+        table.updateMatrixWorld(true);
+        const bounds = new THREE.Box3().setFromObject(table);
+        const size = bounds.getSize(new THREE.Vector3());
+        if (size.y <= 0) return;
+
+        const scale = 1.1 / size.y;
+        const tablePosition = new THREE.Vector3(3.25, -bounds.min.y * scale, 9.0);
+        table.scale.setScalar(scale);
+        table.position.copy(tablePosition);
+        table.traverse((child) => {
+          const mesh = child as THREE.Mesh;
+          if (mesh.isMesh) {
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+          }
+        });
+        this.scene.add(table);
+        this.colliders.push(
+          new THREE.Box3(
+            new THREE.Vector3(
+              tablePosition.x - size.x * scale * 0.5,
+              0,
+              tablePosition.z - size.z * scale * 0.5
+            ),
+            new THREE.Vector3(
+              tablePosition.x + size.x * scale * 0.5,
+              1.1,
+              tablePosition.z + size.z * scale * 0.5
+            )
+          )
+        );
+
+        const teaLoader = new GLTFLoader();
+        teaLoader.load(
+          '/models/tea_set_01_1k.gltf/tea_set_01_1k.gltf',
+          (teaGltf) => {
+            const teaSet = teaGltf.scene;
+            teaSet.updateMatrixWorld(true);
+            const teaBounds = new THREE.Box3().setFromObject(teaSet);
+            const teaSize = teaBounds.getSize(new THREE.Vector3());
+            const teaScale = Math.min(1.0 / teaSize.x, 1.0 / teaSize.z);
+            teaSet.scale.setScalar(teaScale);
+            teaSet.position.set(
+              tablePosition.x,
+              tablePosition.y + 1.1 - teaBounds.min.y * teaScale,
+              tablePosition.z
+            );
+            teaSet.traverse((child) => {
+              const mesh = child as THREE.Mesh;
+              if (mesh.isMesh) {
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+              }
+            });
+            this.scene.add(teaSet);
+          },
+          undefined,
+          (error) => console.error('Could not load tea_set_01_1k.gltf', error)
+        );
+      },
+      undefined,
+      (error) =>
+        console.error('Could not load coffee_table_round_01_1k.gltf', error)
+    );
+  }
+
+  private loadPoolDuck(): void {
+    const loader = new GLTFLoader();
+    loader.load(
+      '/models/rubber_duck_toy_1k.gltf/rubber_duck_toy_1k.gltf',
+      (gltf) => {
+        const duck = gltf.scene;
+        duck.updateMatrixWorld(true);
+        const bounds = new THREE.Box3().setFromObject(duck);
+        const size = bounds.getSize(new THREE.Vector3());
+        if (size.y <= 0) return;
+
+        const scale = 0.9 / size.y;
+        duck.scale.setScalar(scale);
+        this.duckBaseY = -0.1 - bounds.min.y * scale;
+        duck.position.set(12.2, this.duckBaseY, 8.8);
+        duck.rotation.y = Math.PI / 2;
+        duck.traverse((child) => {
+          const mesh = child as THREE.Mesh;
+          if (mesh.isMesh) {
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            const materials = Array.isArray(mesh.material)
+              ? mesh.material
+              : [mesh.material];
+            for (const material of materials) {
+              if (material instanceof THREE.MeshStandardMaterial) {
+                const sourceMap = material.map;
+                if (sourceMap?.image) {
+                  const canvas = document.createElement('canvas');
+                  canvas.width = sourceMap.image.width;
+                  canvas.height = sourceMap.image.height;
+                  const context = canvas.getContext('2d');
+                  if (context) {
+                    context.drawImage(sourceMap.image, 0, 0);
+                    const pixels = context.getImageData(
+                      0,
+                      0,
+                      canvas.width,
+                      canvas.height
+                    );
+                    for (let i = 0; i < pixels.data.length; i += 4) {
+                      const red = pixels.data[i];
+                      const green = pixels.data[i + 1];
+                      const blue = pixels.data[i + 2];
+                      // Shift the orange body texture toward rubber-duck yellow,
+                      // while leaving the red bill and dark eyes intact.
+                      if (
+                        red > 80 &&
+                        green / red > 0.28 &&
+                        green / red < 0.78 &&
+                        blue / red < 0.45
+                      ) {
+                        pixels.data[i + 1] = Math.max(green, red * 0.86);
+                        pixels.data[i + 2] = Math.max(blue, red * 0.04);
+                      }
+                    }
+                    context.putImageData(pixels, 0, 0);
+                    const yellowMap = new THREE.CanvasTexture(canvas);
+                    yellowMap.colorSpace = sourceMap.colorSpace;
+                    yellowMap.flipY = sourceMap.flipY;
+                    yellowMap.needsUpdate = true;
+                    material.map = yellowMap;
+                  }
+                }
+                // Keep the duck visibly yellow even if the texture is unavailable.
+                material.color.set(0xffdf00);
+                material.emissive.set(0x000000);
+                material.emissiveIntensity = 0;
+                material.metalness = 0;
+                material.roughness = 0.45;
+              }
+            }
+          }
+        });
+        this.duckGroup = duck;
+        this.duckCollider = new THREE.Box3(
+          // Slightly inset from the visual bounds so contact feels immediate.
+          new THREE.Vector3(11.86, -0.14, 8.43),
+          new THREE.Vector3(12.54, 0.8, 9.17)
+        );
+        this.colliders.push(this.duckCollider);
+        this.scene.add(duck);
+      },
+      undefined,
+      (error) => console.error('Could not load rubber_duck_toy_1k.gltf', error)
+    );
   }
 }

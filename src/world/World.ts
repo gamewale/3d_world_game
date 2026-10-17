@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { Sky } from 'three/examples/jsm/objects/Sky.js';
 import { VillaBuilder } from './VillaBuilder';
 import { MainGate } from './MainGate';
 
@@ -14,13 +15,15 @@ export class World {
   private groundMaterial: THREE.MeshStandardMaterial;
   private elapsedTime = 0;
   private isButtonPressed = false;
+  private duckCollisionActive = false;
+  private readonly duckVelocity = new THREE.Vector3();
 
   constructor() {
     this.scene = new THREE.Scene();
 
-    const skyColor = new THREE.Color(0x2b1055);
-    this.scene.background = skyColor;
-    this.scene.fog = new THREE.FogExp2(0x2b1055, 0.007);
+    this.scene.background = new THREE.Color(0x9bc9ed);
+    this.scene.fog = new THREE.Fog(0x9bc9ed, 100, 260);
+    this.setupSky();
 
     this.setupLights();
 
@@ -151,12 +154,12 @@ export class World {
   }
 
   private setupLights(): void {
-    const hemiLight = new THREE.HemisphereLight(0xff758f, 0x241434, 1.2);
+    const hemiLight = new THREE.HemisphereLight(0xd9edff, 0x77735f, 1.35);
     hemiLight.position.set(0, 50, 0);
     this.scene.add(hemiLight);
 
-    const dirLight = new THREE.DirectionalLight(0xffae52, 2.2);
-    dirLight.position.set(25, 38, 28);
+    const dirLight = new THREE.DirectionalLight(0xfff4dc, 2.6);
+    dirLight.position.set(-35, 55, -25);
     dirLight.castShadow = true;
 
     dirLight.shadow.mapSize.width = 2048;
@@ -172,6 +175,21 @@ export class World {
     dirLight.shadow.bias = -0.0005;
 
     this.scene.add(dirLight);
+  }
+
+  private setupSky(): void {
+    const sky = new Sky();
+    sky.scale.setScalar(450000);
+
+    const uniforms = sky.material.uniforms;
+    uniforms['turbidity'].value = 2.2;
+    uniforms['rayleigh'].value = 1.8;
+    uniforms['mieCoefficient'].value = 0.004;
+    uniforms['mieDirectionalG'].value = 0.82;
+
+    const sunPosition = new THREE.Vector3(-0.45, 0.72, -0.52).normalize();
+    uniforms['sunPosition'].value.copy(sunPosition);
+    this.scene.add(sky);
   }
 
   /**
@@ -229,11 +247,11 @@ export class World {
         -0.14 + Math.sin(this.elapsedTime * 2.2) * 0.025;
     }
 
-    if (this.builder.flamingoGroup) {
-      this.builder.flamingoGroup.position.y =
-        -0.1 + Math.sin(this.elapsedTime * 2.4) * 0.05;
-      this.builder.flamingoGroup.rotation.y =
-        Math.sin(this.elapsedTime * 0.8) * 0.35;
+    if (this.builder.duckGroup) {
+      this.builder.duckGroup.position.y =
+        this.builder.duckBaseY + Math.sin(this.elapsedTime * 2.4) * 0.05;
+      this.builder.duckGroup.rotation.y =
+        Math.PI / 2 + Math.sin(this.elapsedTime * 0.8) * 0.35;
     }
 
     if (this.builder.fountainStatue) {
@@ -241,5 +259,61 @@ export class World {
       this.builder.fountainStatue.position.y =
         2.5 + Math.sin(this.elapsedTime * 3.0) * 0.12;
     }
+  }
+
+  public pushDuckFromPlayer(
+    playerPosition: THREE.Vector3,
+    deltaTime: number
+  ): boolean {
+    const duck = this.builder.duckGroup;
+    const collider = this.builder.duckCollider;
+    if (!duck || !collider) return false;
+
+    const gapX = Math.max(
+      collider.min.x - playerPosition.x,
+      0,
+      playerPosition.x - collider.max.x
+    );
+    const gapZ = Math.max(
+      collider.min.z - playerPosition.z,
+      0,
+      playerPosition.z - collider.max.z
+    );
+    const collisionGap = Math.hypot(gapX, gapZ);
+    let shouldPlaySound = false;
+    if (collisionGap <= 0.48) {
+      const pushX = duck.position.x - playerPosition.x;
+      const pushZ = duck.position.z - playerPosition.z;
+      const distance = Math.hypot(pushX, pushZ);
+      if (distance > 0.001) {
+        this.duckVelocity.x += (pushX / distance) * 4.5 * deltaTime;
+        this.duckVelocity.z += (pushZ / distance) * 4.5 * deltaTime;
+      }
+      shouldPlaySound = !this.duckCollisionActive;
+      this.duckCollisionActive = true;
+    } else if (collisionGap > 0.65) {
+      this.duckCollisionActive = false;
+    }
+
+    // The duck has little mass and slides over the water with gentle drag.
+    this.duckVelocity.multiplyScalar(Math.exp(-1.8 * deltaTime));
+    const nextX = THREE.MathUtils.clamp(
+      duck.position.x + this.duckVelocity.x * deltaTime,
+      7.6,
+      15.4
+    );
+    const nextZ = THREE.MathUtils.clamp(
+      duck.position.z + this.duckVelocity.z * deltaTime,
+      4.6,
+      13.4
+    );
+    const movedX = nextX - duck.position.x;
+    const movedZ = nextZ - duck.position.z;
+    duck.position.x = nextX;
+    duck.position.z = nextZ;
+    if (nextX === 7.6 || nextX === 15.4) this.duckVelocity.x = 0;
+    if (nextZ === 4.6 || nextZ === 13.4) this.duckVelocity.z = 0;
+    collider.translate(new THREE.Vector3(movedX, 0, movedZ));
+    return shouldPlaySound;
   }
 }

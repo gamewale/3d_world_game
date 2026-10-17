@@ -75,8 +75,7 @@ export class Game {
       deltaTime,
       this.input,
       this.thirdPersonCamera.yaw,
-      this.world.colliders,
-      this.soundManager
+      this.world.colliders
     );
 
     this.thirdPersonCamera.update(
@@ -87,6 +86,9 @@ export class Game {
 
     this.interactionSystem.update(this.player.mesh.position, this.input);
     this.missionManager.update(this.input);
+    if (this.world.pushDuckFromPlayer(this.player.mesh.position, deltaTime)) {
+      this.soundManager.playDuckCollisionSound();
+    }
     this.world.update(deltaTime);
 
     this.renderer.render(this.world.scene, this.camera);
