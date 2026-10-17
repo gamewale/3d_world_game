@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>3D Chaos Villa</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app"></div>
+
+    <!-- HUD Overlay -->
+    <div id="hud">
+      <div id="top-bar">
+        <span id="phase-badge" class="badge">OBJECTIVE</span>
+        <span id="objective-text">Walk through the Main Gate to check out the mysterious Villa</span>
+      </div>
+
+      <div id="center-notifications">
+        <div id="status-banner" class="hidden"></div>
+        <div id="interaction-prompt" class="hidden">[E] Interact</div>
+      </div>
+
+      <div id="bottom-bar">
+        <span id="controls-hint">
+          Click anywhere on the screen to lock mouse & control player
+        </span>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
