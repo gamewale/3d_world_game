@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { Granny } from '../entities/Granny';
 import { BarReceptionist } from '../entities/BarReceptionist';
 import { BarDancer } from '../entities/BarDancer';
-import { BarDoor } from './BarDoor';
+import { RoomDoor } from './RoomDoor';
 
 export class VillaBuilder {
   private scene: THREE.Scene;
@@ -13,10 +13,13 @@ export class VillaBuilder {
   public duckBaseY = -0.1;
   public duckCollider: THREE.Box3 | null = null;
   public grannyNpc: Granny | null = null;
-  public barDoor!: BarDoor;
-  public barInteriorDoor!: BarDoor;
+  public barDoor!: RoomDoor;
+  public bathroomDoor!: RoomDoor;
+  public backyardDoor!: RoomDoor;
   public barReceptionist!: BarReceptionist;
   private readonly barDancers: BarDancer[] = [];
+  private readonly barCourtyardOffset = new THREE.Vector3(-7.5, 0, 24);
+  private ceilingFanRotors: THREE.Object3D[] = [];
   private readonly discoLights: THREE.PointLight[] = [];
   private readonly discoBulbs: THREE.Mesh[] = [];
   private readonly discoBall: THREE.Mesh;
@@ -26,7 +29,10 @@ export class VillaBuilder {
   private perimeterWallMat: THREE.MeshStandardMaterial;
   private outerVillaWallMat: THREE.MeshStandardMaterial;
   private interiorVillaWallMat: THREE.MeshStandardMaterial;
-  private pathwayMat: THREE.MeshStandardMaterial;
+  private villaPavementMat: THREE.MeshStandardMaterial;
+  private gatePavementMat: THREE.MeshStandardMaterial;
+  private roadMat: THREE.MeshStandardMaterial;
+  private interiorTileMat: THREE.MeshStandardMaterial;
 
   constructor(scene: THREE.Scene, colliders: THREE.Box3[]) {
     this.scene = scene;
@@ -44,11 +50,19 @@ export class VillaBuilder {
       color: 0xf1f3f5,
       roughness: 0.65,
     });
+    this.interiorTileMat = this.createInteriorTileMaterial();
 
-    // Fallback pathway material before GLTF textures load
-    this.pathwayMat = new THREE.MeshStandardMaterial({
-      color: 0x8d99ae,
-      roughness: 0.7,
+    this.villaPavementMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      roughness: 0.82,
+    });
+    this.gatePavementMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      roughness: 0.82,
+    });
+    this.roadMat = new THREE.MeshStandardMaterial({
+      color: 0x292b31,
+      roughness: 0.92,
     });
 
     this.discoBall = new THREE.Mesh(
@@ -71,7 +85,21 @@ export class VillaBuilder {
     this.addGrannyNPC();
 
     this.loadPlasterWallGLTF();
-    this.loadPathwayGLTF();
+    this.loadPavementGLTF(
+      '/brick_pavement_03_1k.gltf/brick_pavement_03_1k.gltf',
+      '/brick_pavement_03_1k.gltf',
+      this.villaPavementMat
+    );
+    this.loadPavementGLTF(
+      '/square_pavers_1k.gltf/square_pavers_1k.gltf',
+      '/square_pavers_1k.gltf',
+      this.gatePavementMat
+    );
+    this.loadPavementGLTF(
+      '/asphalt_track_1k.gltf/asphalt_track_1k.gltf',
+      '/asphalt_track_1k.gltf',
+      this.roadMat
+    );
   }
 
   private loadPlasterWallGLTF(): void {
@@ -118,22 +146,24 @@ export class VillaBuilder {
       }
 
       const targetMaterials = [
-        { mat: this.perimeterWallMat, tint: 0xf8f9fa },
+        { mat: this.perimeterWallMat, tint: 0xffffff },
         { mat: this.outerVillaWallMat, tint: 0xffffff },
-        { mat: this.interiorVillaWallMat, tint: 0xf1f3f5 },
+        { mat: this.interiorVillaWallMat, tint: 0xffffff },
       ];
 
       for (const { mat, tint } of targetMaterials) {
         mat.color.setHex(tint);
-        mat.map = foundMat.map;
+        // Keep the plaster's surface relief, but skip its gray albedo texture
+        // so the walls read as freshly painted white instead of bare cement.
+        mat.map = null;
         mat.normalMap = foundMat.normalMap;
         mat.normalScale.set(1.1, 1.1);
         mat.roughnessMap = foundMat.roughnessMap;
         mat.metalnessMap = foundMat.metalnessMap;
         mat.aoMap = foundMat.aoMap;
-        mat.aoMapIntensity = 0.75;
-        mat.roughness = foundMat.roughness ?? 0.85;
-        mat.metalness = foundMat.metalness ?? 0.05;
+        mat.aoMapIntensity = 0.45;
+        mat.roughness = 0.9;
+        mat.metalness = 0;
         mat.needsUpdate = true;
       }
     };
@@ -148,69 +178,54 @@ export class VillaBuilder {
     );
   }
 
-  private loadPathwayGLTF(): void {
+  private loadPavementGLTF(
+    primaryPath: string,
+    fallbackPath: string,
+    targetMaterial: THREE.MeshStandardMaterial
+  ): void {
     const loader = new GLTFLoader();
-    const primaryPath =
-      '/herringbone_concrete_tile_03_1k.gltf/herringbone_concrete_tile_03_1k.gltf';
-    const fallbackPath = '/herringbone_concrete_tile_03_1k.gltf';
 
     const applyLoadedGLTF = (gltfScene: THREE.Group) => {
       let sourceMat: THREE.MeshStandardMaterial | null = null;
-
       gltfScene.traverse((child) => {
-        if (
-          (child as THREE.Mesh).isMesh &&
-          (child as THREE.Mesh).material &&
-          !sourceMat
-        ) {
-          const mat = (child as THREE.Mesh).material;
-          if (Array.isArray(mat)) {
-            sourceMat = mat[0] as THREE.MeshStandardMaterial;
-          } else {
-            sourceMat = mat as THREE.MeshStandardMaterial;
-          }
-        }
+        const mesh = child as THREE.Mesh;
+        if (!mesh.isMesh || !mesh.material || sourceMat) return;
+        sourceMat = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material) as THREE.MeshStandardMaterial;
       });
-
       if (!sourceMat) return;
 
       const foundMat = sourceMat as THREE.MeshStandardMaterial;
-      const maps = [
+      for (const texture of [
         foundMat.map,
         foundMat.normalMap,
         foundMat.roughnessMap,
         foundMat.metalnessMap,
         foundMat.aoMap,
-      ];
-
-      for (const tex of maps) {
-        if (tex) {
-          tex.wrapS = THREE.RepeatWrapping;
-          tex.wrapT = THREE.RepeatWrapping;
-          tex.needsUpdate = true;
-        }
+      ]) {
+        if (!texture) continue;
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        texture.needsUpdate = true;
       }
 
-      this.pathwayMat.color.setHex(0xffffff);
-      this.pathwayMat.map = foundMat.map;
-      this.pathwayMat.normalMap = foundMat.normalMap;
-      this.pathwayMat.normalScale.set(1.25, 1.25);
-      this.pathwayMat.roughnessMap = foundMat.roughnessMap;
-      this.pathwayMat.metalnessMap = foundMat.metalnessMap;
-      this.pathwayMat.aoMap = foundMat.aoMap;
-      this.pathwayMat.aoMapIntensity = 0.85;
-      this.pathwayMat.roughness = foundMat.roughness ?? 0.8;
-      this.pathwayMat.metalness = foundMat.metalness ?? 0.02;
-      this.pathwayMat.needsUpdate = true;
+      targetMaterial.color.setHex(0xffffff);
+      targetMaterial.map = foundMat.map;
+      targetMaterial.normalMap = foundMat.normalMap;
+      targetMaterial.normalScale.set(1, 1);
+      targetMaterial.roughnessMap = foundMat.roughnessMap;
+      targetMaterial.metalnessMap = foundMat.metalnessMap;
+      targetMaterial.aoMap = foundMat.aoMap;
+      targetMaterial.aoMapIntensity = 0.8;
+      targetMaterial.roughness = foundMat.roughness ?? 0.82;
+      targetMaterial.metalness = foundMat.metalness ?? 0;
+      targetMaterial.needsUpdate = true;
     };
 
     loader.load(
       primaryPath,
       (gltf) => applyLoadedGLTF(gltf.scene),
       undefined,
-      () => {
-        loader.load(fallbackPath, (gltf) => applyLoadedGLTF(gltf.scene));
-      }
+      () => loader.load(fallbackPath, (gltf) => applyLoadedGLTF(gltf.scene))
     );
   }
 
@@ -234,6 +249,42 @@ export class VillaBuilder {
     return mesh;
   }
 
+  private createInteriorTileMaterial(): THREE.MeshStandardMaterial {
+    const textureLoader = new THREE.TextureLoader();
+    const colorMap = textureLoader.load(
+      '/interior_tiles_1k.gltf/textures/interior_tiles_diff_1k.jpg'
+    );
+    colorMap.colorSpace = THREE.SRGBColorSpace;
+    colorMap.wrapS = THREE.RepeatWrapping;
+    colorMap.wrapT = THREE.RepeatWrapping;
+    colorMap.anisotropy = 8;
+
+    return new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      map: colorMap,
+      roughness: 0.92,
+      metalness: 0,
+    });
+  }
+
+  private applyInteriorFloorUVs(mesh: THREE.Mesh, width: number, depth: number): void {
+    const geometry = mesh.geometry as THREE.BufferGeometry;
+    const positions = geometry.attributes.position as THREE.BufferAttribute;
+    const normals = geometry.attributes.normal as THREE.BufferAttribute;
+    const uvs = geometry.attributes.uv as THREE.BufferAttribute;
+    const tileSize = 1.5;
+
+    for (let i = 0; i < positions.count; i++) {
+      if (Math.abs(normals.getY(i)) < 0.99) continue;
+      uvs.setXY(
+        i,
+        (positions.getX(i) + width / 2) / tileSize,
+        (positions.getZ(i) + depth / 2) / tileSize
+      );
+    }
+    uvs.needsUpdate = true;
+  }
+
   private addPathBlock(
     size: [number, number, number],
     pos: [number, number, number],
@@ -242,7 +293,7 @@ export class VillaBuilder {
     const [w, h, d] = size;
     const geo = new THREE.BoxGeometry(w, h, d);
 
-    // Scale UVs so 1 full herringbone tile texture covers 3m x 3m
+    // Scale pavement UVs so one texture tile covers 3m x 3m.
     const tileMeters = 3.0;
     const uvAttr = geo.attributes.uv as THREE.BufferAttribute;
     for (let i = 0; i < uvAttr.count; i++) {
@@ -377,10 +428,6 @@ export class VillaBuilder {
   }
 
   private buildOuterStreet(): void {
-    const asphaltMat = new THREE.MeshStandardMaterial({
-      color: 0x1d1e2c,
-      roughness: 0.9,
-    });
     const sidewalkMat = new THREE.MeshStandardMaterial({
       color: 0xbdb2ff,
       roughness: 0.75,
@@ -402,15 +449,17 @@ export class VillaBuilder {
       emissiveIntensity: 1.0,
     });
 
-    this.addBlock([120, 0.04, 10], [0, 0.02, 29], asphaltMat, false);
-    this.addBlock([120, 0.14, 3.2], [0, 0.07, 22.4], sidewalkMat, false);
+    this.addPathBlock([120, 0.04, 10], [0, 0.02, 29], this.roadMat);
     this.addBlock([120, 0.14, 3.2], [0, 0.07, 35.6], sidewalkMat, false);
+    // Square pavers cover the full gate-side sidewalk and sit just above the
+    // brick path where the two surfaces overlap.
+    this.addPathBlock([120, 0.01, 3.2], [0, 0.045, 22.4], this.gatePavementMat);
 
     for (let x = -45; x <= 45; x += 6) {
       this.addBlock([3.2, 0.06, 0.25], [x, 0.03, 29], stripeMat, false);
     }
 
-    const lampXPositions = [-18, -7, 7, 18];
+    const lampXPositions = [-18, 7, 18];
     for (const x of lampXPositions) {
       this.addBlock([0.35, 5.5, 0.35], [x, 2.75, 22.2], poleMat, true);
       this.addBlock([0.3, 0.25, 1.6], [x, 5.4, 22.8], poleMat, false);
@@ -419,8 +468,8 @@ export class VillaBuilder {
   }
 
   private buildCourtyardPathsAndPool(): void {
-    // Central walkway from street sidewalk to villa front door now uses herringbone concrete tiles
-    this.addPathBlock([6, 0.06, 24], [0, 0.03, 10], this.pathwayMat);
+    // Brick paving runs from the villa entrance to the outer gate-side pavers.
+    this.addPathBlock([6, 0.04, 24], [0, 0.02, 10], this.villaPavementMat);
 
     const tileTex = this.createPoolTileTexture();
     const poolTileMat = new THREE.MeshStandardMaterial({
@@ -491,6 +540,22 @@ export class VillaBuilder {
       true
     );
 
+    const posterTexture = new THREE.TextureLoader().load('/poster.png');
+    posterTexture.colorSpace = THREE.SRGBColorSpace;
+    const poster = new THREE.Mesh(
+      new THREE.PlaneGeometry(6.2, 1.98),
+      new THREE.MeshStandardMaterial({
+        map: posterTexture,
+        roughness: 1,
+        metalness: 0,
+        side: THREE.DoubleSide,
+      })
+    );
+    // Flush to the outside face of the left perimeter wall beside the gate.
+    poster.position.set(-7.2, 2.65, 20.412);
+    poster.receiveShadow = true;
+    this.scene.add(poster);
+
     this.addWallBlock(
       [1.2, 5.0, 1.2],
       [-3.4, 2.5, 20],
@@ -504,21 +569,22 @@ export class VillaBuilder {
       true
     );
 
+    const rearBoundaryZ = -48;
     this.addWallBlock(
       [48.8, wallH, 0.8],
-      [0, wallY, -26],
+      [0, wallY, rearBoundaryZ],
       this.perimeterWallMat,
       true
     );
     this.addWallBlock(
-      [0.8, wallH, 46.8],
-      [-24, wallY, -3],
+      [0.8, wallH, 68.8],
+      [-24, wallY, -14],
       this.perimeterWallMat,
       true
     );
     this.addWallBlock(
-      [0.8, wallH, 46.8],
-      [24, wallY, -3],
+      [0.8, wallH, 68.8],
+      [24, wallY, -14],
       this.perimeterWallMat,
       true
     );
@@ -529,176 +595,750 @@ export class VillaBuilder {
       color: 0xff4ecd,
       roughness: 0.3,
     });
-    const floorMat = new THREE.MeshStandardMaterial({
-      color: 0x3d405b,
-      roughness: 0.45,
-    });
-    const terraceMat = new THREE.MeshStandardMaterial({
-      color: 0x2b2d42,
-      roughness: 0.5,
-    });
-
-    const wallH = 4.2;
+    // Raise the upstairs floor to give the ground-floor hall a full 5 m ceiling.
+    const groundFloorClearance = 5.0;
+    const wallH = groundFloorClearance + 0.2;
     const wallY = wallH / 2;
 
-    this.addBlock([32, 0.1, 18], [0, 0.05, -11], floorMat, false);
+    const groundFloor = this.addBlock([32, 0.1, 18], [0, 0.05, -11], this.interiorTileMat, false);
+    this.applyInteriorFloorUVs(groundFloor, 32, 18);
 
+    this.buildRearEntrance(wallH);
+    // Seal the former bar room's west wall after moving the bar outside.
     this.addWallBlock(
-      [32.8, wallH, 0.8],
-      [0, wallY, -20],
+      [0.8, wallH, 18.8],
+      [-16, wallY, -11],
       this.outerVillaWallMat,
       true
     );
-    // Leave a proper opening in the west wall for the bar entrance.
-    this.addWallBlock(
-      [0.8, wallH, 5.6],
-      [-16, wallY, -17.6],
-      this.outerVillaWallMat,
-      true
-    );
-    this.addWallBlock(
-      [0.8, wallH, 11.6],
-      [-16, wallY, -7.4],
-      this.outerVillaWallMat,
-      true
-    );
-    this.addWallBlock(
-      [0.8, 1.5, 1.6],
-      [-16, 3.45, -14],
-      this.outerVillaWallMat,
-      true
-    );
-    this.barDoor = new BarDoor(this.scene, this.colliders, {
-      interactionPosition: new THREE.Vector3(-17.1, 0, -14),
-      frameX: -15.53,
-      hingeX: -15.52,
-      centerZ: -14,
-      openingWidth: 1.6,
-      swingDirection: 1,
-    });
     this.addWallBlock(
       [0.8, wallH, 18.8],
       [16, wallY, -11],
       this.outerVillaWallMat,
       true
     );
+    this.buildGroundFloorFrontFacade(wallH);
     this.addWallBlock(
-      [14, wallH, 0.8],
-      [-9, wallY, -2],
-      this.outerVillaWallMat,
-      true
-    );
-    this.addWallBlock(
-      [14, wallH, 0.8],
-      [9, wallY, -2],
-      this.outerVillaWallMat,
-      true
-    );
-    this.addWallBlock(
-      [4, 1.2, 0.8],
-      [0, 3.6, -2],
+      [3.2, 2.2, 0.8],
+      [0, groundFloorClearance - 0.9, -2],
       this.outerVillaWallMat,
       true
     );
 
-    this.addWallBlock(
-      [0.5, wallH, 6.7],
-      [-5, wallY, -5.35],
-      this.interiorVillaWallMat,
-      true
-    );
-    this.addWallBlock(
-      [0.5, wallH, 9.7],
-      [-5, wallY, -15.15],
-      this.interiorVillaWallMat,
-      true
-    );
-    this.addWallBlock(
-      [0.5, 1.2, 1.6],
-      [-5, 3.6, -9.5],
-      this.interiorVillaWallMat,
-      true
-    );
-    this.barInteriorDoor = new BarDoor(this.scene, this.colliders, {
-      interactionPosition: new THREE.Vector3(-3.8, 0, -9.5),
-      frameX: -5.27,
-      hingeX: -5.28,
-      centerZ: -9.5,
-      openingWidth: 1.6,
-      swingDirection: -1,
-    });
-
-    this.addWallBlock(
-      [0.5, wallH, 5.9],
-      [5, wallY, -4.95],
-      this.interiorVillaWallMat,
-      true
-    );
-    this.addWallBlock(
-      [0.5, wallH, 8.9],
-      [5, wallY, -15.55],
-      this.interiorVillaWallMat,
-      true
-    );
-    this.addWallBlock(
-      [0.5, 1.2, 3.2],
-      [5, 3.6, -9.5],
-      this.interiorVillaWallMat,
-      true
-    );
-
-    const stairMat = new THREE.MeshStandardMaterial({
-      color: 0xe9c46a,
-      roughness: 0.4,
-    });
-    const numSteps = 14;
-    const stepRise = 0.3;
-    const stepRun = 0.6;
-    for (let i = 0; i < numSteps; i++) {
-      const h = (i + 1) * stepRise;
-      const z = -8.5 - i * stepRun;
-      this.addBlock([2.6, h, stepRun], [-2.5, h / 2, z], stairMat, true);
+    // Keep the kitchen open to the hall through a wider, framed entrance.
+    for (const [startZ, endZ] of [
+      [-20, -10.6],
+      [-8.4, -2],
+    ]) {
+      this.addWallBlock(
+        [0.5, wallH, endZ - startZ],
+        [-4.4, wallY, (startZ + endZ) / 2],
+        this.interiorVillaWallMat,
+        true
+      );
     }
-
-    this.addBlock([12.2, 0.3, 18.8], [-10.3, 4.15, -11], terraceMat, true);
-    this.addBlock([17.2, 0.3, 18.8], [7.8, 4.15, -11], terraceMat, true);
-    this.addBlock([3.4, 0.3, 6.4], [-2.5, 4.15, -4.8], terraceMat, true);
-    this.addBlock([3.4, 0.3, 3.8], [-2.5, 4.15, -18.5], terraceMat, true);
-
-    this.addBlock([32.8, 1.1, 0.4], [0, 4.85, -1.8], trimMat, true);
-    this.addBlock([32.8, 1.1, 0.4], [0, 4.85, -20.2], trimMat, true);
-    this.addBlock([0.4, 1.1, 18.8], [-16.2, 4.85, -11], trimMat, true);
-    this.addBlock([0.4, 1.1, 18.8], [16.2, 4.85, -11], trimMat, true);
-
     this.addWallBlock(
-      [0.8, 3.2, 0.8],
-      [-4.5, 5.8, -2.2],
-      this.outerVillaWallMat,
+      [0.5, 2.2, 2.2],
+      [-4.4, groundFloorClearance - 0.9, -9.5],
+      this.interiorVillaWallMat,
       true
     );
-    this.addWallBlock(
-      [0.8, 3.2, 0.8],
-      [4.5, 5.8, -2.2],
-      this.outerVillaWallMat,
-      true
-    );
-    this.addBlock([10.2, 0.7, 1.0], [0, 7.6, -2.2], trimMat, false);
+    const kitchenFrameMat = new THREE.MeshStandardMaterial({ color: 0x80552f, roughness: 0.68 });
+    for (const z of [-10.6, -8.4]) {
+      this.addBlock([0.56, 3.0, 0.14], [-4.4, 1.5, z], kitchenFrameMat, false);
+    }
+    this.addBlock([0.56, 0.16, 2.32], [-4.4, 3.0, -9.5], kitchenFrameMat, false);
 
-    const villaSignTex = this.createNeonSignTexture(
-      'VILLA CHAOS',
-      '#00f5d4',
-      '#ff4ecd'
-    );
-    const villaSignMat = new THREE.MeshStandardMaterial({
-      map: villaSignTex,
-      emissiveMap: villaSignTex,
-      emissive: new THREE.Color(0xffffff),
-      emissiveIntensity: 0.95,
-      roughness: 0.2,
-    });
-    this.addBlock([7.6, 1.6, 0.25], [0, 7.6, -1.65], villaSignMat, false);
+    // Keep the east-side button room open to the stair hall as one large room.
+
+    this.buildModernStaircase(groundFloorClearance);
+    this.buildRightSideServiceRooms(groundFloorClearance);
+    this.buildExtraRoomKitchen();
+
+    // Second-floor slab with a compact transverse stairwell opening. The flight
+    // rises toward -X, leaving a clear route past the bar entrance below.
+    const secondFloorWest = this.addBlock([12.1, 0.3, 18.8], [-10.35, groundFloorClearance + 0.15, -11], this.interiorTileMat, true);
+    const secondFloorEast = this.addBlock([12.1, 0.3, 18.8], [10.35, groundFloorClearance + 0.15, -11], this.interiorTileMat, true);
+    const secondFloorCenter = this.addBlock([8.6, 0.3, 15.95], [0, groundFloorClearance + 0.15, -9.575], this.interiorTileMat, true);
+    this.applyInteriorFloorUVs(secondFloorWest, 12.1, 18.8);
+    this.applyInteriorFloorUVs(secondFloorEast, 12.1, 18.8);
+    this.applyInteriorFloorUVs(secondFloorCenter, 8.6, 15.95);
+
+    const upperTrimY = groundFloorClearance + 0.85;
+    this.addBlock([32.8, 1.1, 0.4], [0, upperTrimY, -20.2], trimMat, true);
+    this.addBlock([0.4, 1.1, 18.8], [-16.2, upperTrimY, -11], trimMat, true);
+    this.addBlock([0.4, 1.1, 18.8], [16.2, upperTrimY, -11], trimMat, true);
+
+    this.buildUpperFrontFacade(groundFloorClearance);
 
     this.populateRooms();
+  }
+
+  private buildRearEntrance(wallHeight: number): void {
+    const wallWidth = 32.8;
+    const wallDepth = 0.8;
+    const wallZ = -20;
+    // Offset the back door from the stair foot to leave a clear landing area.
+    const doorX = 6.2;
+    const doorWidth = 1.7;
+    const doorHeight = 2.5;
+    const xStart = -wallWidth / 2;
+    const xEnd = wallWidth / 2;
+    const doorStartX = doorX - doorWidth / 2;
+    const doorEndX = doorX + doorWidth / 2;
+
+    // Keep the rear entrance on the ground floor, beside the indoor stair landing.
+    for (const [startX, endX] of [
+      [xStart, doorStartX],
+      [doorEndX, xEnd],
+    ]) {
+      this.addWallBlock(
+        [endX - startX, wallHeight, wallDepth],
+        [(startX + endX) / 2, wallHeight / 2, wallZ],
+        this.outerVillaWallMat,
+        true
+      );
+    }
+    this.addWallBlock(
+      [doorWidth, wallHeight - doorHeight, wallDepth],
+      [doorX, doorHeight + (wallHeight - doorHeight) / 2, wallZ],
+      this.outerVillaWallMat,
+      true
+    );
+
+    const frameMat = new THREE.MeshStandardMaterial({ color: 0x80552f, roughness: 0.68 });
+    for (const x of [doorStartX, doorEndX]) {
+      this.addBlock([0.12, doorHeight, wallDepth + 0.06], [x, doorHeight / 2, wallZ], frameMat, false);
+    }
+    this.addBlock(
+      [doorWidth + 0.12, 0.14, wallDepth + 0.06],
+      [doorX, doorHeight, wallZ],
+      frameMat,
+      false
+    );
+
+    this.backyardDoor = new RoomDoor(this.scene, this.colliders, {
+      interactionPosition: new THREE.Vector3(doorX, 1.15, wallZ + 1.15),
+      centerX: doorX,
+      centerZ: wallZ,
+      width: doorWidth,
+      height: doorHeight,
+    });
+
+    // A ground-level paved apron connects the door directly to the expanded yard.
+    const patioMat = new THREE.MeshStandardMaterial({ color: 0xd1cec6, roughness: 0.76 });
+    this.addBlock(
+      [9, 0.04, 4],
+      [doorX, 0.02, wallZ - wallDepth / 2 - 2],
+      patioMat,
+      true
+    );
+  }
+
+  private buildGroundFloorFrontFacade(wallHeight: number): void {
+    const buildWing = (xStart: number, xEnd: number, windowStart: number, windowEnd: number) => {
+      const windowBottom = 0.78;
+      const windowTop = 3.25;
+      const fullSegments: Array<[number, number]> = [
+        [xStart, windowStart],
+        [windowEnd, xEnd],
+      ];
+      for (const [start, end] of fullSegments) {
+        this.addWallBlock(
+          [end - start, wallHeight, 0.8],
+          [(start + end) / 2, wallHeight / 2, -2],
+          this.outerVillaWallMat,
+          true
+        );
+      }
+      this.addWallBlock(
+        [windowEnd - windowStart, windowBottom, 0.8],
+        [(windowStart + windowEnd) / 2, windowBottom / 2, -2],
+        this.outerVillaWallMat,
+        true
+      );
+      this.addWallBlock(
+        [windowEnd - windowStart, wallHeight - windowTop, 0.8],
+        [(windowStart + windowEnd) / 2, (wallHeight + windowTop) / 2, -2],
+        this.outerVillaWallMat,
+        true
+      );
+      this.addFrontWindow(
+        (windowStart + windowEnd) / 2,
+        (windowBottom + windowTop) / 2,
+        windowEnd - windowStart,
+        windowTop - windowBottom,
+        -1.51
+      );
+    };
+
+    buildWing(-16, -1.6, -13, -7);
+    buildWing(1.6, 16, 6, 13);
+
+    // Keep the main entrance open, with a timber frame and no door leaf.
+    const timberFrame = new THREE.MeshStandardMaterial({ color: 0x80552f, roughness: 0.68 });
+    for (const x of [-1.6, 1.6]) {
+      const jamb = new THREE.Mesh(new THREE.BoxGeometry(0.18, 2.9, 0.8), timberFrame);
+      jamb.position.set(x, 1.45, -2);
+      jamb.castShadow = true;
+      this.scene.add(jamb);
+    }
+    const lintel = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.2, 0.8), timberFrame);
+    lintel.position.set(0, 2.9, -2);
+    lintel.castShadow = true;
+    this.scene.add(lintel);
+    this.addHindiEntrancePlaque('शुभ', -2.65, 2.55, 0.82, 0.54);
+    this.addHindiEntrancePlaque('लाभ', 2.65, 2.55, 0.82, 0.54);
+    this.addHindiEntrancePlaque('श्री', 0, 3.55, 1.02, 0.58);
+  }
+
+  private addHindiEntrancePlaque(
+    text: string,
+    x: number,
+    y: number,
+    width: number,
+    height: number
+  ): void {
+    const backing = new THREE.Mesh(
+      new THREE.BoxGeometry(width + 0.12, height + 0.12, 0.1),
+      new THREE.MeshStandardMaterial({ color: 0x762b27, roughness: 0.48, metalness: 0.08 })
+    );
+    backing.position.set(x, y, -1.56);
+    backing.castShadow = true;
+    this.scene.add(backing);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 384;
+    canvas.height = 256;
+    const context = canvas.getContext('2d');
+    if (!context) return;
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = '#f4d58d';
+    context.shadowColor = '#f4d58d';
+    context.shadowBlur = 12;
+    context.font = 'bold 150px "Noto Sans Devanagari", "Nirmala UI", sans-serif';
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.fillText(text, canvas.width / 2, canvas.height / 2 + 8);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    const lettering = new THREE.Mesh(
+      new THREE.PlaneGeometry(width, height),
+      new THREE.MeshBasicMaterial({ map: texture, transparent: true, toneMapped: false })
+    );
+    lettering.position.set(x, y, -1.49);
+    this.scene.add(lettering);
+  }
+
+  private buildUpperFrontFacade(floorHeight: number): void {
+    const xStart = -16;
+    const xEnd = 16;
+    const wallBottom = floorHeight + 0.3;
+    const wallTop = 9.2;
+    const openings: Array<[number, number]> = [
+      [-12.8, -5.0],
+      [4.2, 13.6],
+    ];
+    const windowBottom = 5.78;
+    const windowTop = 8.68;
+    const wallZ = -2.0;
+    let cursor = xStart;
+
+    for (const [start, end] of openings) {
+      if (start > cursor) {
+        this.addWallBlock(
+          [start - cursor, wallTop - wallBottom, 0.5],
+          [(cursor + start) / 2, (wallBottom + wallTop) / 2, wallZ],
+          this.outerVillaWallMat,
+          true
+        );
+      }
+      this.addWallBlock(
+        [end - start, windowBottom - wallBottom, 0.5],
+        [(start + end) / 2, (wallBottom + windowBottom) / 2, wallZ],
+        this.outerVillaWallMat,
+        true
+      );
+      this.addWallBlock(
+        [end - start, wallTop - windowTop, 0.5],
+        [(start + end) / 2, (windowTop + wallTop) / 2, wallZ],
+        this.outerVillaWallMat,
+        true
+      );
+      this.addFrontWindow(
+        (start + end) / 2,
+        (windowBottom + windowTop) / 2,
+        end - start,
+        windowTop - windowBottom,
+        -1.66
+      );
+      cursor = end;
+    }
+    if (cursor < xEnd) {
+      this.addWallBlock(
+        [xEnd - cursor, wallTop - wallBottom, 0.5],
+        [(cursor + xEnd) / 2, (wallBottom + wallTop) / 2, wallZ],
+        this.outerVillaWallMat,
+        true
+      );
+    }
+
+    const balconyCenterX = -8.3;
+    const balconyWidth = 14.4;
+    const balconyDepth = 4.3;
+    const balconyFrontZ = 2.45;
+    const balcony = this.addBlock(
+      [balconyWidth, 0.32, balconyDepth],
+      [balconyCenterX, floorHeight + 0.46, 0.3],
+      this.outerVillaWallMat,
+      true
+    );
+    balcony.receiveShadow = true;
+
+    const railMaterial = new THREE.MeshStandardMaterial({
+      color: 0x39434a,
+      roughness: 0.34,
+      metalness: 0.68,
+    });
+    const railXStart = balconyCenterX - balconyWidth / 2 + 0.18;
+    const railXEnd = balconyCenterX + balconyWidth / 2 - 0.18;
+    for (const y of [5.78, 6.48]) {
+      const rail = new THREE.Mesh(
+        new THREE.BoxGeometry(railXEnd - railXStart, 0.065, 0.065),
+        railMaterial
+      );
+      rail.position.set((railXStart + railXEnd) / 2, y, balconyFrontZ);
+      rail.castShadow = true;
+      this.scene.add(rail);
+    }
+    for (let x = railXStart; x <= railXEnd + 0.01; x += 1.25) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.78, 0.055), railMaterial);
+      post.position.set(x, 6.12, balconyFrontZ);
+      post.castShadow = true;
+      this.scene.add(post);
+    }
+    for (const x of [balconyCenterX - balconyWidth / 2, balconyCenterX + balconyWidth / 2]) {
+      const sideRail = new THREE.Mesh(
+        new THREE.BoxGeometry(0.065, 0.065, balconyDepth - 0.2),
+        railMaterial
+      );
+      sideRail.position.set(x, 6.48, 0.3);
+      sideRail.castShadow = true;
+      this.scene.add(sideRail);
+      for (const z of [-1.45, 0.3, 2.05]) {
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.78, 0.055), railMaterial);
+        post.position.set(x, 6.12, z);
+        this.scene.add(post);
+      }
+    }
+
+    const timber = new THREE.MeshStandardMaterial({ color: 0x9b6234, roughness: 0.72 });
+    const canopy = new THREE.Mesh(new THREE.BoxGeometry(14.8, 0.2, 5.8), timber);
+    canopy.position.set(balconyCenterX, 9.38, 0.7);
+    canopy.rotation.x = 0.16;
+    canopy.castShadow = true;
+    canopy.receiveShadow = true;
+    this.scene.add(canopy);
+
+    for (let x = -15.3; x <= -1.3; x += 2.0) {
+      const rafter = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.15, 5.75), timber);
+      rafter.position.set(x, 9.28, 0.7);
+      rafter.rotation.x = 0.16;
+      rafter.castShadow = true;
+      this.scene.add(rafter);
+    }
+    for (const x of [-15.2, -8.3, -1.4]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.2, 3.3, 0.2), timber);
+      post.position.set(x, 7.25, 2.34);
+      post.castShadow = true;
+      this.scene.add(post);
+    }
+
+    // A slim red metal awning shades the ground-floor windows on the right.
+    const awningMat = new THREE.MeshStandardMaterial({
+      color: 0x7c3941,
+      roughness: 0.58,
+      metalness: 0.22,
+    });
+    const awning = new THREE.Mesh(new THREE.BoxGeometry(14, 0.16, 1.65), awningMat);
+    awning.position.set(9, 5.03, -0.72);
+    awning.rotation.x = 0.1;
+    awning.castShadow = true;
+    this.scene.add(awning);
+    for (let x = 2.2; x <= 15.8; x += 0.65) {
+      const rib = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.035, 1.55), awningMat);
+      rib.position.set(x, 5.13, -0.72);
+      rib.rotation.x = 0.1;
+      this.scene.add(rib);
+    }
+  }
+
+  private addFrontWindow(
+    centerX: number,
+    centerY: number,
+    width: number,
+    height: number,
+    frontZ: number
+  ): void {
+    const glass = new THREE.Mesh(
+      new THREE.PlaneGeometry(width - 0.16, height - 0.16),
+      new THREE.MeshPhysicalMaterial({
+        color: 0x9bbac8,
+        roughness: 0.18,
+        metalness: 0.12,
+        transparent: true,
+        opacity: 0.58,
+        side: THREE.DoubleSide,
+      })
+    );
+    glass.position.set(centerX, centerY, frontZ);
+    this.scene.add(glass);
+
+    const frameMaterial = new THREE.MeshStandardMaterial({ color: 0xe8e5dc, roughness: 0.55 });
+    const frameDepth = 0.14;
+    const rail = 0.11;
+    const xLeft = centerX - width / 2;
+    const xRight = centerX + width / 2;
+    const yBottom = centerY - height / 2;
+    const yTop = centerY + height / 2;
+    const frameBar = (size: [number, number, number], x: number, y: number) => {
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(...size), frameMaterial);
+      bar.position.set(x, y, frontZ + 0.025);
+      bar.castShadow = true;
+      this.scene.add(bar);
+    };
+
+    frameBar([rail, height + rail, frameDepth], xLeft, centerY);
+    frameBar([rail, height + rail, frameDepth], xRight, centerY);
+    frameBar([width + rail, rail, frameDepth], centerX, yBottom);
+    frameBar([width + rail, rail, frameDepth], centerX, yTop);
+    frameBar([0.075, height, frameDepth], centerX, centerY);
+  }
+
+  private buildRightSideServiceRooms(floorHeight: number): void {
+    const wallMat = new THREE.MeshStandardMaterial({ color: 0xe7e1d7, roughness: 0.78 });
+    const trimMat = new THREE.MeshStandardMaterial({ color: 0x98724c, roughness: 0.52 });
+    const stoneMat = new THREE.MeshStandardMaterial({ color: 0xd9d3c8, roughness: 0.3 });
+    const cabinetMat = new THREE.MeshStandardMaterial({ color: 0x67503e, roughness: 0.56 });
+    const ceramicMat = new THREE.MeshStandardMaterial({ color: 0xf4f2eb, roughness: 0.2 });
+
+    // Keep only the compact bathroom in the east service wing. The old
+    // kitchen area is opened back into the hall; the kitchen now occupies the
+    // unused room on the villa's west side.
+    const westWallX = 11.0;
+    const wallThickness = 0.22;
+    const wallHeight = floorHeight;
+    const wallCenterY = wallHeight / 2;
+    const wallZStart = -20;
+    const bathroomEndZ = -15.0;
+    const serviceWingEastX = 14.5;
+    const serviceWingStartX = westWallX + wallThickness / 2;
+    const roomDoorCenterX = 12.8;
+    const roomDoorWidth = 1.35;
+    const roomDoorHeight = 2.45;
+
+    // West wall faces the hall. Leave its middle open as the entry to the
+    // The bathroom's hall-facing wall; the rest remains open hall space.
+    this.addBlock(
+      [wallThickness, wallHeight, bathroomEndZ - wallZStart],
+      [westWallX, wallCenterY, (wallZStart + bathroomEndZ) / 2],
+      wallMat,
+      true
+    );
+    this.addBlock(
+      [wallThickness, wallHeight, bathroomEndZ - wallZStart],
+      [serviceWingEastX, wallCenterY, (wallZStart + bathroomEndZ) / 2],
+      wallMat,
+      true
+    );
+
+    // Close the ends of both rooms with door openings facing the wash area.
+    const addRoomDoorway = (boundaryZ: number) => {
+      const doorStartX = roomDoorCenterX - roomDoorWidth / 2;
+      const doorEndX = roomDoorCenterX + roomDoorWidth / 2;
+      for (const [start, end] of [
+        [serviceWingStartX, doorStartX],
+        [doorEndX, serviceWingEastX],
+      ]) {
+        this.addBlock(
+          [end - start, wallHeight, wallThickness],
+          [(start + end) / 2, wallCenterY, boundaryZ],
+          wallMat,
+          true
+        );
+      }
+
+      this.addBlock(
+        [roomDoorWidth + 0.09, wallHeight - roomDoorHeight, wallThickness + 0.04],
+        [roomDoorCenterX, (wallHeight + roomDoorHeight) / 2, boundaryZ],
+        wallMat,
+        true
+      );
+      for (const side of [-1, 1]) {
+        this.addBlock(
+          [0.09, roomDoorHeight, wallThickness + 0.04],
+          [roomDoorCenterX + side * (roomDoorWidth / 2 + 0.045), roomDoorHeight / 2, boundaryZ],
+          trimMat,
+          true
+        );
+      }
+
+    };
+
+    // Keep the E-operated bathroom door. No partition or door is built for
+    // the former kitchen section, leaving that part of the hall open.
+    addRoomDoorway(bathroomEndZ);
+    this.bathroomDoor = new RoomDoor(this.scene, this.colliders, {
+      interactionPosition: new THREE.Vector3(roomDoorCenterX, 0, -14.25),
+      centerX: roomDoorCenterX,
+      centerZ: bathroomEndZ,
+      width: roomDoorWidth,
+      height: roomDoorHeight,
+    });
+
+    // Compact bathroom layout in the south room, with a clear route from its
+    // door beside the shared wash area.
+    this.addBlock([0.8, 0.24, 0.85], [13.7, 0.88, -18.4], ceramicMat, true);
+    const basin = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.29, 0.18, 24), ceramicMat);
+    basin.position.set(11.65, 0.98, -17.2);
+    basin.castShadow = true;
+    this.scene.add(basin);
+    this.addBlock([0.12, 0.78, 0.12], [11.65, 0.39, -17.2], cabinetMat, true);
+
+    const toiletBase = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.31, 0.42, 20), ceramicMat);
+    toiletBase.position.set(13.7, 0.21, -16.0);
+    toiletBase.castShadow = true;
+    this.scene.add(toiletBase);
+    const toiletSeat = new THREE.Mesh(new THREE.TorusGeometry(0.25, 0.045, 8, 20), ceramicMat);
+    toiletSeat.rotation.x = Math.PI / 2;
+    toiletSeat.position.set(13.7, 0.43, -16.0);
+    this.scene.add(toiletSeat);
+    this.addBlock([0.55, 0.72, 0.22], [14.05, 0.72, -16.35], ceramicMat, true);
+
+    const showerBase = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.12, 1.7), ceramicMat);
+    showerBase.position.set(12.8, 0.06, -18.4);
+    showerBase.receiveShadow = true;
+    this.scene.add(showerBase);
+    const showerGlass = new THREE.Mesh(
+      new THREE.BoxGeometry(0.035, 2.15, 1.7),
+      new THREE.MeshPhysicalMaterial({
+        color: 0xc9edf2,
+        roughness: 0.12,
+        transmission: 0.65,
+        transparent: true,
+        opacity: 0.36,
+        depthWrite: false,
+      })
+    );
+    showerGlass.position.set(11.9, 1.08, -18.4);
+    this.scene.add(showerGlass);
+
+    // Shared wash area vanity and mirror, mounted on the east-facing wall.
+    this.addBlock([0.72, 0.84, 1.55], [14.08, 0.42, -13.0], cabinetMat, true);
+    this.addBlock([0.82, 0.08, 1.62], [14.02, 0.88, -13.0], stoneMat, true);
+    const sharedSink = new THREE.Mesh(
+      new THREE.BoxGeometry(0.5, 0.12, 0.66),
+      ceramicMat
+    );
+    sharedSink.position.set(13.77, 0.98, -13.0);
+    sharedSink.castShadow = true;
+    this.scene.add(sharedSink);
+    const sharedMirror = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.2, 1.05),
+      new THREE.MeshPhysicalMaterial({
+        color: 0xe6f2f5,
+        metalness: 0.72,
+        roughness: 0.12,
+        side: THREE.DoubleSide,
+      })
+    );
+    sharedMirror.rotation.y = -Math.PI / 2;
+    sharedMirror.position.set(14.51, 2.05, -13.0);
+    this.scene.add(sharedMirror);
+  }
+
+  private buildExtraRoomKitchen(): void {
+    const cabinetMat = new THREE.MeshStandardMaterial({ color: 0x67503e, roughness: 0.56 });
+    const stoneMat = new THREE.MeshStandardMaterial({ color: 0xd9d3c8, roughness: 0.3 });
+    const applianceMat = new THREE.MeshStandardMaterial({
+      color: 0x34383b,
+      roughness: 0.32,
+      metalness: 0.35,
+    });
+
+    // Turn the unused west-side room into the kitchen. Keep the worktop on
+    // the outer wall and leave the widened timber-framed entrance clear.
+    this.addBlock([1.25, 0.88, 7.6], [-14.8, 0.44, -12.8], cabinetMat, true);
+    this.addBlock([1.42, 0.09, 7.75], [-14.8, 0.925, -12.8], stoneMat, true);
+    this.addBlock([0.62, 0.95, 6.8], [-15.0, 2.05, -12.8], cabinetMat, true);
+    this.addBlock([1.05, 1.9, 0.95], [-7.4, 0.95, -16.2], applianceMat, true);
+    this.addBlock([0.8, 1.6, 0.65], [-7.6, 0.8, -13.8], cabinetMat, true);
+
+    const sink = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.12, 0.72), applianceMat);
+    sink.position.set(-14.8, 1.02, -14.8);
+    sink.castShadow = true;
+    this.scene.add(sink);
+    const faucet = new THREE.Mesh(
+      new THREE.TorusGeometry(0.13, 0.025, 8, 18, Math.PI),
+      applianceMat
+    );
+    faucet.rotation.z = Math.PI / 2;
+    faucet.position.set(-14.5, 1.23, -14.8);
+    this.scene.add(faucet);
+
+    const hob = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.06, 0.88), applianceMat);
+    hob.position.set(-14.8, 1.01, -10.0);
+    this.scene.add(hob);
+    for (const z of [-10.27, -9.73]) {
+      for (const x of [-15.0, -14.6]) {
+        const burner = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.13, 0.13, 0.025, 16),
+          applianceMat
+        );
+        burner.position.set(x, 1.055, z);
+        this.scene.add(burner);
+      }
+    }
+  }
+
+  private buildModernStaircase(floorHeight: number): void {
+    const treadMat = new THREE.MeshStandardMaterial({
+      color: 0x8c6246,
+      roughness: 0.34,
+      metalness: 0.06,
+    });
+    const steelMat = new THREE.MeshStandardMaterial({
+      color: 0x252b34,
+      roughness: 0.28,
+      metalness: 0.78,
+    });
+    const ledMat = new THREE.MeshStandardMaterial({
+      color: 0xffdca0,
+      emissive: 0xffa83d,
+      emissiveIntensity: 0.5,
+      roughness: 0.3,
+    });
+    const glassMat = new THREE.MeshPhysicalMaterial({
+      color: 0xbfe7ee,
+      roughness: 0.12,
+      metalness: 0.08,
+      transmission: 0.52,
+      transparent: true,
+      opacity: 0.4,
+      thickness: 0.04,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    const railMat = new THREE.MeshStandardMaterial({
+      color: 0x333944,
+      roughness: 0.25,
+      metalness: 0.8,
+    });
+
+    const stepCount = 16;
+    const run = 0.5;
+    const rise = floorHeight / stepCount;
+    const stairWidth = 1.75;
+    const bottomX = 4.6;
+    const centerZ = -18.68;
+
+    for (let i = 0; i < stepCount; i += 1) {
+      const x = bottomX - (i + 0.5) * run;
+      const topY = (i + 1) * rise;
+      const tread = this.addBlock(
+        [run - 0.035, 0.13, stairWidth],
+        [x, topY - 0.065, centerZ],
+        treadMat,
+        true
+      );
+      tread.castShadow = true;
+
+      const nosing = new THREE.Mesh(
+        new THREE.BoxGeometry(0.045, 0.025, stairWidth - 0.08),
+        ledMat
+      );
+      nosing.position.set(x - (run - 0.035) / 2 + 0.035, topY - 0.12, centerZ);
+      this.scene.add(nosing);
+    }
+
+    const start = new THREE.Vector3(bottomX, 0.08, centerZ);
+    const end = new THREE.Vector3(bottomX - stepCount * run, stepCount * rise - 0.05, centerZ);
+    this.addStairBeam(start, end, 0.16, 0.2, steelMat);
+
+    // Slim glass balustrades and metal handrails follow the incline on both sides.
+    for (const side of [1] as const) {
+      const railZ = centerZ + side * (stairWidth / 2 + 0.045);
+      const panelShape = new THREE.Shape();
+      panelShape.moveTo(start.x, start.y + 0.13);
+      panelShape.lineTo(end.x, end.y + 0.13);
+      panelShape.lineTo(end.x, end.y + 1.02);
+      panelShape.lineTo(start.x, start.y + 1.02);
+      panelShape.closePath();
+      const panel = new THREE.Mesh(new THREE.ShapeGeometry(panelShape), glassMat);
+      panel.position.z = railZ;
+      panel.castShadow = true;
+      this.scene.add(panel);
+
+      const topRailStart = new THREE.Vector3(start.x, start.y + 1.02, railZ);
+      const topRailEnd = new THREE.Vector3(end.x, end.y + 1.02, railZ);
+      this.addStairBeam(topRailStart, topRailEnd, 0.075, 0.075, railMat);
+
+      for (let i = 0; i <= stepCount; i += 2) {
+        const t = i / stepCount;
+        const postX = THREE.MathUtils.lerp(start.x, end.x, t);
+        const postY = THREE.MathUtils.lerp(start.y + 0.13, end.y + 0.13, t);
+        const postHeight = 0.89;
+        const post = new THREE.Mesh(
+          new THREE.BoxGeometry(0.045, postHeight, 0.045),
+          railMat
+        );
+        post.position.set(postX, postY + postHeight / 2, railZ);
+        this.scene.add(post);
+      }
+    }
+
+    // Wall-side steel cleats fasten each floating tread close to the rear wall.
+    for (let i = 0; i < stepCount; i += 1) {
+      const x = bottomX - (i + 0.5) * run;
+      const topY = (i + 1) * rise;
+      const wallBracket = new THREE.Mesh(
+        new THREE.BoxGeometry(0.24, 0.075, 0.3),
+        steelMat
+      );
+      wallBracket.position.set(x, topY - 0.13, centerZ - stairWidth / 2 - 0.035);
+      wallBracket.castShadow = true;
+      this.scene.add(wallBracket);
+    }
+
+    const wallHandrailZ = centerZ - stairWidth / 2 + 0.1;
+    const wallHandrailStart = new THREE.Vector3(bottomX, 1.08, wallHandrailZ);
+    const wallHandrailEnd = new THREE.Vector3(
+      bottomX - stepCount * run,
+      stepCount * rise + 0.92,
+      wallHandrailZ
+    );
+    this.addStairBeam(wallHandrailStart, wallHandrailEnd, 0.07, 0.07, railMat);
+
+    // Keep the space beneath the elevated flight open for a lounge seat.
+  }
+
+  private addStairBeam(
+    start: THREE.Vector3,
+    end: THREE.Vector3,
+    thickness: number,
+    depth: number,
+    material: THREE.Material
+  ): void {
+    const direction = end.clone().sub(start);
+    const beam = new THREE.Mesh(
+      new THREE.BoxGeometry(direction.length(), thickness, depth),
+      material
+    );
+    beam.position.copy(start).add(end).multiplyScalar(0.5);
+    beam.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), direction.normalize());
+    beam.castShadow = true;
+    this.scene.add(beam);
   }
 
   private addBarDrinks(): void {
@@ -856,13 +1496,15 @@ export class VillaBuilder {
       this.discoBulbs.push(bulb);
     });
 
-    const dancers = [
-      { x: -13.15, yaw: 0.48 },
-      { x: -11.25, yaw: -0.48 },
-    ];
+    const receptionistPosition = new THREE.Vector3(-10.25, 0, -17.35);
+    const dancerZ = -6.82;
+    const dancers = [-13.15, -11.25].map((x) => ({
+      x,
+      yaw: Math.atan2(receptionistPosition.x - x, receptionistPosition.z - dancerZ),
+    }));
     for (const dancer of dancers) {
       const npc = new BarDancer(
-        new THREE.Vector3(dancer.x, 0.48, -6.82),
+        new THREE.Vector3(dancer.x, 0.48, dancerZ),
         dancer.yaw
       );
       this.barDancers.push(npc);
@@ -875,10 +1517,13 @@ export class VillaBuilder {
     this.discoElapsed += deltaTime;
     this.discoBall.rotation.y += deltaTime * 0.45;
     this.discoBall.rotation.x = Math.sin(this.discoElapsed * 0.35) * 0.12;
+    this.ceilingFanRotors.forEach((rotor) => {
+      rotor.rotation.y += deltaTime * 10;
+    });
     this.barDancers.forEach((dancer) => dancer.update(deltaTime));
 
-    const centerX = -12.2;
-    const centerZ = -9.2;
+    const centerX = -12.2 + this.barCourtyardOffset.x;
+    const centerZ = -9.2 + this.barCourtyardOffset.z;
     this.discoLights.forEach((light, index) => {
       const phase = this.discoElapsed * 0.65 + (index * Math.PI * 2) / this.discoLights.length;
       const x = centerX + Math.cos(phase) * 2.1;
@@ -894,14 +1539,11 @@ export class VillaBuilder {
 
   private populateRooms(): void {
     const foyerLight = new THREE.PointLight(0xffb703, 30, 18);
-    foyerLight.position.set(1.5, 3.7, -8);
+    foyerLight.position.set(1.5, 4.6, -8);
     this.scene.add(foyerLight);
 
-    const carpetMat = new THREE.MeshStandardMaterial({
-      color: 0xd90429,
-      roughness: 0.85,
-    });
-    this.addBlock([2.8, 0.04, 6.0], [0, 0.11, -5.2], carpetMat, false);
+    const barSceneStart = this.scene.children.length;
+    const barColliderStart = this.colliders.length;
 
     const loungeLight = new THREE.PointLight(0xff4ecd, 35, 16);
     loungeLight.position.set(-10.5, 3.6, -11);
@@ -930,6 +1572,16 @@ export class VillaBuilder {
     this.addBarSpeaker();
     this.buildBarStage();
 
+    // Relocate the complete bar setup from the villa to the courtyard's
+    // left corner just inside the main gate.
+    for (const object of this.scene.children.slice(barSceneStart)) {
+      object.position.add(this.barCourtyardOffset);
+    }
+    for (const collider of this.colliders.slice(barColliderStart)) {
+      collider.translate(this.barCourtyardOffset);
+    }
+    this.buildOutdoorBarEnclosure();
+
     const barSignTex = this.createNeonSignTexture(
       'VICE BAR',
       '#ff4ecd',
@@ -949,32 +1601,308 @@ export class VillaBuilder {
     barSign.rotation.y = Math.PI / 2;
     this.scene.add(barSign);
 
-    const sofaMat = new THREE.MeshStandardMaterial({
-      color: 0xffbe0b,
-      roughness: 0.6,
-    });
-    this.addBlock([3.8, 0.65, 1.4], [-10.5, 0.325, -4.2], sofaMat, true);
+    this.buildModernHallCeiling();
+    this.loadHallFurnishings();
 
     const studyLight = new THREE.PointLight(0x00bbf9, 32, 16);
-    studyLight.position.set(10.5, 3.6, -11);
+    studyLight.position.set(10.5, 4.5, -11);
     this.scene.add(studyLight);
 
-    const woodMat = new THREE.MeshStandardMaterial({
-      color: 0x6f4e37,
-      roughness: 0.7,
-    });
     const pedestalMat = new THREE.MeshStandardMaterial({
       color: 0x1a0b2e,
       roughness: 0.3,
       metalness: 0.5,
     });
 
-    this.addBlock([0.9, 3.6, 11], [15.1, 1.8, -11], woodMat, true);
-    this.addBlock([3.2, 0.85, 1.6], [10.0, 0.425, -11.5], woodMat, true);
-    this.addBlock([1.4, 1.1, 1.4], [12.5, 0.55, -16.5], pedestalMat, true);
+    this.addBlock([1.4, 1.1, 1.4], [3.7, 0.55, -16.5], pedestalMat, true);
 
-    this.addBlock([1.0, 0.35, 2.1], [8.5, 4.48, -6.5], stoolMat, true);
-    this.addBlock([1.0, 0.35, 2.1], [11.0, 4.48, -6.5], stoolMat, true);
+    this.addHallTelevision();
+  }
+
+  private buildModernHallCeiling(): void {
+    const gypsumMat = new THREE.MeshStandardMaterial({ color: 0xf1eee8, roughness: 0.82 });
+    const insetMat = new THREE.MeshStandardMaterial({ color: 0xe5dfd3, roughness: 0.72 });
+    const walnutMat = new THREE.MeshStandardMaterial({ color: 0x71492f, roughness: 0.48 });
+    const coveMat = new THREE.MeshStandardMaterial({
+      color: 0xffd9a0,
+      emissive: 0xffb45e,
+      emissiveIntensity: 0.65,
+      roughness: 0.3,
+    });
+    // The ceiling must participate in vertical collision so a jump cannot
+    // clip through the false-ceiling mesh into the upstairs floor.
+    const ceiling = this.addBlock([20.5, 0.18, 15.1], [5.5, 4.87, -9.9], gypsumMat, true);
+    ceiling.castShadow = false;
+
+    // A stepped inset tray, warm perimeter cove lighting, and walnut slat accents
+    // give the main hall a finished false ceiling. The stairwell stays open behind it.
+    this.addBlock([9.3, 0.06, 7.1], [5.5, 4.73, -9.9], insetMat, false);
+    this.addBlock([9.0, 0.035, 0.055], [5.5, 4.68, -6.5], coveMat, false);
+    this.addBlock([9.0, 0.035, 0.055], [5.5, 4.68, -13.3], coveMat, false);
+    this.addBlock([0.055, 0.035, 6.8], [1.05, 4.68, -9.9], coveMat, false);
+    this.addBlock([0.055, 0.035, 6.8], [9.95, 4.68, -9.9], coveMat, false);
+
+    for (const z of [-12.65, -12.25, -11.85, -11.45, -11.05, -10.65, -10.25, -9.55, -9.15, -8.75, -8.35, -7.95, -7.55, -7.15]) {
+      const slat = this.addBlock([8.7, 0.045, 0.11], [5.5, 4.68, z], walnutMat, false);
+      slat.castShadow = false;
+    }
+
+    const trimMat = new THREE.MeshStandardMaterial({ color: 0xd1c4ad, roughness: 0.68 });
+    for (const x of [-4.55, 15.55]) {
+      this.addBlock([0.12, 0.1, 15.0], [x, 4.69, -9.9], trimMat, false);
+    }
+    for (const z of [-17.35, -2.45]) {
+      this.addBlock([20.2, 0.1, 0.12], [5.5, 4.69, z], trimMat, false);
+    }
+
+    const lightTrimMat = new THREE.MeshStandardMaterial({
+      color: 0xfff1d2,
+      emissive: 0xffe2a6,
+      emissiveIntensity: 1.1,
+      roughness: 0.25,
+    });
+    for (const x of [0, 5.5, 11]) {
+      for (const z of [-4.0, -9.9, -15.8]) {
+        if (x === 5.5 && (z === -9.9 || z === -15.8)) continue;
+        const fixture = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.14, 0.14, 0.035, 20),
+          lightTrimMat
+        );
+        fixture.position.set(x, 4.755, z);
+        this.scene.add(fixture);
+      }
+    }
+  }
+
+  private loadHallFurnishings(): void {
+    const loader = new GLTFLoader();
+    for (const x of [3.15, 7.85]) {
+      loader.load(
+        '/models/ceiling_fan_1k.gltf/ceiling_fan_1k.gltf',
+        (gltf) => {
+          const fan = gltf.scene;
+          fan.scale.setScalar(1.25);
+          fan.position.set(x, 4.84, -9.9);
+          fan.traverse((node) => {
+            const mesh = node as THREE.Mesh;
+            if (mesh.isMesh) {
+              mesh.castShadow = true;
+              mesh.receiveShadow = true;
+            }
+            if (node.name === 'ceiling_fan_blades') this.ceilingFanRotors.push(node);
+          });
+          this.scene.add(fan);
+        },
+        undefined,
+        (error) => console.error('Could not load ceiling_fan_1k.gltf', error)
+      );
+    }
+
+    // Keep one sofa opposite the TV and place a pair beneath the stairs.
+    this.loadHallFurnitureModel(
+      '/models/Sofa_01_1k.gltf/Sofa_01_1k.gltf',
+      new THREE.Vector3(1.5, 0, -15.2),
+      1.75,
+      -Math.PI / 2
+    );
+    this.loadHallFurnitureModel(
+      '/models/Sofa_01_1k.gltf/Sofa_01_1k.gltf',
+      new THREE.Vector3(-2.8, 0, -18.1),
+      1.55,
+      0
+    );
+    this.loadHallFurnitureModel(
+      '/models/Sofa_01_1k.gltf/Sofa_01_1k.gltf',
+      new THREE.Vector3(0.0, 0, -18.1),
+      1.55,
+      0
+    );
+    this.loadHallFurnitureModel(
+      '/models/coffee_table_round_01_1k.gltf/coffee_table_round_01_1k.gltf',
+      new THREE.Vector3(-2.65, 0, -14.5),
+      1.15,
+      -Math.PI / 2
+    );
+    this.addSofaCornerPlant();
+    this.loadHallFurnitureModel(
+      '/models/dining_table_1k.gltf/dining_table_1k.gltf',
+      new THREE.Vector3(-8.8, 0, -5.6),
+      1.0,
+      -Math.PI / 2
+    );
+  }
+
+  private addSofaCornerPlant(): void {
+    const position = new THREE.Vector3(1.75, 0, -18.1);
+    const potMat = new THREE.MeshStandardMaterial({ color: 0x88745f, roughness: 0.68 });
+    const leafMat = new THREE.MeshStandardMaterial({ color: 0x3d7847, roughness: 0.78 });
+    const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.18, 0.42, 20), potMat);
+    pot.position.set(position.x, 0.21, position.z);
+    pot.castShadow = true;
+    this.scene.add(pot);
+
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.05, 0.58, 10), leafMat);
+    stem.position.set(position.x, 0.68, position.z);
+    this.scene.add(stem);
+    for (let i = 0; i < 7; i += 1) {
+      const angle = (i / 7) * Math.PI * 2;
+      const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.19, 12, 10), leafMat);
+      leaf.scale.set(0.52, 1.65, 0.55);
+      leaf.position.set(
+        position.x + Math.cos(angle) * 0.17,
+        0.76 + (i % 3) * 0.11,
+        position.z + Math.sin(angle) * 0.17
+      );
+      leaf.rotation.z = -Math.cos(angle) * 0.42;
+      leaf.rotation.x = Math.sin(angle) * 0.42;
+      leaf.castShadow = true;
+      this.scene.add(leaf);
+    }
+  }
+
+  private buildOutdoorBarEnclosure(): void {
+    const centerX = -18.1;
+    const westInnerX = -23.2;
+    const eastInnerX = -13.0;
+    const southInnerZ = 4.8;
+    const northInnerZ = 19.3;
+    const wallThickness = 0.3;
+    const wallHeight = 4.75;
+    const wallCenterY = wallHeight / 2;
+    const southWallZ = southInnerZ - wallThickness / 2;
+    const northWallZ = northInnerZ + wallThickness / 2;
+    const wallDepth = northWallZ - southWallZ;
+    const wallWidth = eastInnerX - westInnerX + wallThickness;
+    const wallMaterial = this.outerVillaWallMat;
+
+    this.addWallBlock(
+      [wallThickness, wallHeight, wallDepth],
+      [westInnerX - wallThickness / 2, wallCenterY, (southWallZ + northWallZ) / 2],
+      wallMaterial,
+      true
+    );
+    const barEntryWidth = 2.6;
+    const barEntryCenterZ = (southInnerZ + northInnerZ) / 2;
+    const barEntryStartZ = barEntryCenterZ - barEntryWidth / 2;
+    const barEntryEndZ = barEntryCenterZ + barEntryWidth / 2;
+    const entrySideSegments: Array<[number, number]> = [
+      [southWallZ, barEntryStartZ],
+      [barEntryEndZ, northWallZ],
+    ];
+    for (const [start, end] of entrySideSegments) {
+      this.addWallBlock(
+        [wallThickness, wallHeight, end - start],
+        [eastInnerX + wallThickness / 2, wallCenterY, (start + end) / 2],
+        wallMaterial,
+        true
+      );
+    }
+    const barDoorHeight = 2.65;
+    const entryHeaderHeight = wallHeight - barDoorHeight;
+    this.addWallBlock(
+      [wallThickness, entryHeaderHeight, barEntryWidth],
+      [eastInnerX + wallThickness / 2, barDoorHeight + entryHeaderHeight / 2, barEntryCenterZ],
+      wallMaterial,
+      true
+    );
+    this.addWallBlock(
+      [wallWidth, wallHeight, wallThickness],
+      [centerX, wallCenterY, southWallZ],
+      wallMaterial,
+      true
+    );
+
+    this.addWallBlock(
+      [wallWidth, wallHeight, wallThickness],
+      [centerX, wallCenterY, northWallZ],
+      wallMaterial,
+      true
+    );
+    this.barDoor = new RoomDoor(this.scene, this.colliders, {
+      interactionPosition: new THREE.Vector3(eastInnerX + 1.3, 0, barEntryCenterZ),
+      centerX: eastInnerX + wallThickness / 2,
+      centerZ: barEntryCenterZ,
+      width: barEntryWidth,
+      height: barDoorHeight,
+      wallAxis: 'z',
+    });
+
+    const signBacking = new THREE.MeshStandardMaterial({
+      color: 0x17121f,
+      roughness: 0.3,
+      metalness: 0.45,
+    });
+    this.addBlock(
+      [0.14, 0.78, 2.9],
+      [eastInnerX + 0.36, 3.35, barEntryCenterZ],
+      signBacking,
+      false
+    );
+    const signTexture = this.createNeonSignTexture('BAR', '#00f5d4', '#ff4ecd');
+    const signFace = new THREE.Mesh(
+      new THREE.PlaneGeometry(2.7, 0.62),
+      new THREE.MeshBasicMaterial({ map: signTexture, toneMapped: false })
+    );
+    signFace.rotation.y = Math.PI / 2;
+    signFace.position.set(eastInnerX + 0.445, 3.35, barEntryCenterZ);
+    this.scene.add(signFace);
+
+    const ceiling = this.addBlock(
+      [wallWidth, 0.3, wallDepth],
+      [centerX, wallHeight + 0.15, (southInnerZ + northInnerZ) / 2],
+      new THREE.MeshStandardMaterial({ color: 0xe7e1d7, roughness: 0.88 }),
+      true
+    );
+    ceiling.receiveShadow = true;
+  }
+
+  private addHallTelevision(): void {
+    const frameMat = new THREE.MeshStandardMaterial({ color: 0x08090d, roughness: 0.24, metalness: 0.55 });
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(2.9, 1.65, 0.16), frameMat);
+    frame.position.set(-4.04, 2.55, -14.5);
+    frame.rotation.y = Math.PI / 2;
+    frame.castShadow = true;
+    frame.receiveShadow = true;
+    this.scene.add(frame);
+
+    const texture = new THREE.TextureLoader().load('/tv_show.jpg');
+    texture.colorSpace = THREE.SRGBColorSpace;
+    const screen = new THREE.Mesh(
+      new THREE.PlaneGeometry(2.72, 1.52),
+      new THREE.MeshBasicMaterial({ map: texture, toneMapped: false })
+    );
+    screen.position.set(-3.945, 2.55, -14.5);
+    screen.rotation.y = Math.PI / 2;
+    this.scene.add(screen);
+  }
+
+  private loadHallFurnitureModel(
+    path: string,
+    position: THREE.Vector3,
+    scale: number,
+    rotationY: number
+  ): void {
+    new GLTFLoader().load(
+      path,
+      (gltf) => {
+        const furniture = gltf.scene;
+        furniture.scale.setScalar(scale);
+        furniture.rotation.y = rotationY;
+        furniture.position.copy(position);
+        furniture.traverse((node) => {
+          const mesh = node as THREE.Mesh;
+          if (mesh.isMesh) {
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+          }
+        });
+        furniture.updateMatrixWorld(true);
+        this.colliders.push(new THREE.Box3().setFromObject(furniture));
+        this.scene.add(furniture);
+      },
+      undefined,
+      (error) => console.error(`Could not load hall furniture ${path}`, error)
+    );
   }
 
   private addBarSpeaker(): void {
@@ -1011,8 +1939,6 @@ export class VillaBuilder {
 
   private buildTropicalTrees(): void {
     const palmCoords: [number, number][] = [
-      [-17, 14],
-      [-18, 4],
       [19, 16],
       [-20, -14],
       [20, -14],
@@ -1065,7 +1991,7 @@ export class VillaBuilder {
 
   private addGrannyNPC(): void {
     // Keep granny in the initial camera view beside the entrance path and trees.
-    const granny = new Granny(new THREE.Vector3(2.5, 0, 22.5));
+    const granny = new Granny(new THREE.Vector3(2.5, 0.05, 22.5));
     granny.group.scale.setScalar(1.18);
     this.grannyNpc = granny;
     this.scene.add(granny.group);

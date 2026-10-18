@@ -28,12 +28,20 @@ export class Player {
   private currentAction: THREE.AnimationAction | null = null;
   private isLoaded = false;
   private isDancing = false;
+  private isFallingDownstairs = false;
+  private downstairsFallElapsed = 0;
+  private readonly downstairsFallDuration = 3.2;
+  private readonly fallStartPosition = new THREE.Vector3();
 
   constructor(startPosition = new THREE.Vector3(0, 0, 26)) {
     this.mesh = new THREE.Group();
     this.mesh.position.copy(startPosition);
 
     this.loadCharacterModel();
+  }
+
+  public get isInSlowMotionFall(): boolean {
+    return this.isFallingDownstairs;
   }
 
   private loadCharacterModel(): void {
@@ -176,6 +184,11 @@ export class Player {
       this.mixer.update(deltaTime);
     }
 
+    if (this.isFallingDownstairs) {
+      this.updateDownstairsFall(deltaTime);
+      return;
+    }
+
     if (this.isDancing && (!isInsideBar || !this.danceAction?.isRunning())) {
       this.isDancing = false;
       if (!isInsideBar && this.currentAction === this.danceAction) {
@@ -220,6 +233,12 @@ export class Player {
     if (moveDir.lengthSq() > 0) {
       moveDir.normalize();
       moveDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), cameraYaw);
+
+      if (this.isTryingToDescendStairs(moveDir)) {
+        this.beginDownstairsFall();
+        this.updateDownstairsFall(deltaTime);
+        return;
+      }
 
       const speed = isSprinting ? this.sprintSpeed : this.walkSpeed;
 
@@ -275,6 +294,54 @@ export class Player {
           : this.walkAction
         : this.idleAction;
       if (nextAction) this.setAnimation(nextAction);
+    }
+  }
+
+  private isTryingToDescendStairs(direction: THREE.Vector3): boolean {
+    const position = this.mesh.position;
+    const withinFlight =
+      position.x > -4.5 && position.x < 5.1 &&
+      Math.abs(position.z + 18.68) < 1.3 &&
+      position.y > 0.45 && position.y < 5.6;
+    // The flight rises toward -X, so moving toward +X means descending.
+    return withinFlight && direction.x > 0.5;
+  }
+
+  private beginDownstairsFall(): void {
+    this.isFallingDownstairs = true;
+    this.downstairsFallElapsed = 0;
+    this.fallStartPosition.copy(this.mesh.position);
+    this.velocity.set(0, 0, 0);
+    this.isDancing = false;
+    this.isGrounded = false;
+  }
+
+  private updateDownstairsFall(deltaTime: number): void {
+    this.downstairsFallElapsed = Math.min(
+      this.downstairsFallDuration,
+      this.downstairsFallElapsed + deltaTime
+    );
+    const progress = this.downstairsFallElapsed / this.downstairsFallDuration;
+    // Slide/fall down the flight in first-person slow motion. The avatar stays
+    // hidden by the camera until reaching the ground at the foot of the stairs.
+    const easedProgress = progress * progress * (3 - 2 * progress);
+    this.mesh.position.x = THREE.MathUtils.lerp(
+      this.fallStartPosition.x,
+      4.6,
+      easedProgress
+    );
+    this.mesh.position.y = THREE.MathUtils.lerp(
+      this.fallStartPosition.y,
+      0,
+      easedProgress
+    );
+
+    if (progress >= 1) {
+      this.mesh.position.set(4.6, 0, this.fallStartPosition.z);
+      this.velocity.set(0, 0, 0);
+      this.isGrounded = true;
+      this.isFallingDownstairs = false;
+      this.setAnimation(this.idleAction, 0.25);
     }
   }
 

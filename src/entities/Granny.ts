@@ -80,8 +80,8 @@ export class Granny {
     this.buildCane();
 
     this.collider = new THREE.Box3(
-      new THREE.Vector3(position.x - 0.43, 0, position.z - 0.36),
-      new THREE.Vector3(position.x + 0.43, 1.75, position.z + 0.36)
+      new THREE.Vector3(position.x - 0.43, position.y, position.z - 0.36),
+      new THREE.Vector3(position.x + 0.43, position.y + 1.75, position.z + 0.36)
     );
   }
 

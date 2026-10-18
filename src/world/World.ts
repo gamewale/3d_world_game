@@ -41,7 +41,7 @@ export class World {
     this.builder = new VillaBuilder(this.scene, this.colliders);
     this.builder.build();
 
-    // Secret Button on the pedestal in the East Study (12.5, 1.18, -16.5)
+    // Secret Button on the pedestal beside the east-side service rooms.
     this.secretButtonMat = new THREE.MeshStandardMaterial({
       color: 0xff2a85,
       emissive: 0xff2a85,
@@ -50,7 +50,7 @@ export class World {
     });
     const btnGeo = new THREE.CylinderGeometry(0.38, 0.44, 0.22, 20);
     this.secretButtonMesh = new THREE.Mesh(btnGeo, this.secretButtonMat);
-    this.secretButtonMesh.position.set(12.5, 1.18, -16.5);
+    this.secretButtonMesh.position.set(3.7, 1.18, -16.5);
     this.scene.add(this.secretButtonMesh);
 
     this.mainGate = new MainGate(20);
@@ -234,11 +234,12 @@ export class World {
     addGroundPatch(9, 86, 11.5, 57);
   }
 
-  public update(deltaTime: number): void {
+  public update(deltaTime: number, playerPosition: THREE.Vector3): void {
     this.elapsedTime += deltaTime;
     this.mainGate.update(deltaTime);
-    this.builder.barDoor.update(deltaTime);
-    this.builder.barInteriorDoor.update(deltaTime);
+    this.builder.barDoor.update(deltaTime, playerPosition);
+    this.builder.bathroomDoor.update(deltaTime, playerPosition);
+    this.builder.backyardDoor.update(deltaTime, playerPosition);
     this.builder.grannyNpc?.update(deltaTime);
     this.builder.barReceptionist?.update(deltaTime);
     this.builder.updateBarScene(deltaTime);
@@ -262,6 +263,30 @@ export class World {
 
   }
 
+  public get bathroomDoorPosition(): THREE.Vector3 {
+    return this.builder.bathroomDoor.interactionPosition;
+  }
+
+  public get isBathroomDoorOpen(): boolean {
+    return this.builder.bathroomDoor.isOpen;
+  }
+
+  public openBathroomDoor(playerPosition: THREE.Vector3): void {
+    this.builder.bathroomDoor.openDoor(playerPosition);
+  }
+
+  public get backyardDoorPosition(): THREE.Vector3 {
+    return this.builder.backyardDoor.interactionPosition;
+  }
+
+  public get isBackyardDoorOpen(): boolean {
+    return this.builder.backyardDoor.isOpen;
+  }
+
+  public openBackyardDoor(playerPosition: THREE.Vector3): void {
+    this.builder.backyardDoor.openDoor(playerPosition);
+  }
+
   public get barDoorPosition(): THREE.Vector3 {
     return this.builder.barDoor.interactionPosition;
   }
@@ -270,26 +295,15 @@ export class World {
     return this.builder.barDoor.isOpen;
   }
 
-  public openBarDoor(): void {
-    this.builder.barDoor.openDoor();
-  }
-
-  public get barInteriorDoorPosition(): THREE.Vector3 {
-    return this.builder.barInteriorDoor.interactionPosition;
-  }
-
-  public get isBarInteriorDoorOpen(): boolean {
-    return this.builder.barInteriorDoor.isOpen;
-  }
-
-  public openBarInteriorDoor(): void {
-    this.builder.barInteriorDoor.openDoor();
+  public openBarDoor(playerPosition: THREE.Vector3): void {
+    this.builder.barDoor.openDoor(playerPosition);
   }
 
   public isPlayerInsideBar(position: THREE.Vector3): boolean {
-    // The bar occupies the west wing, beyond either bar entrance.
-    return position.x > -15.6 && position.x < -5.45 &&
-      position.z > -19.6 && position.z < -2.4;
+    // The outdoor bar occupies the left courtyard corner just inside the gate.
+    return position.y < 0.9 &&
+      position.x > -23.6 && position.x < -12.8 &&
+      position.z > 3.8 && position.z < 19.4;
   }
 
   public pushDuckFromPlayer(

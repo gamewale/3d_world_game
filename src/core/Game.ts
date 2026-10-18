@@ -21,6 +21,7 @@ export class Game {
   private interactionSystem: InteractionSystem;
   private soundManager: SoundManager;
   private missionManager: MissionManager;
+  private wasPlayerFalling = false;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -60,20 +61,28 @@ export class Game {
       this.soundManager
     );
     this.interactionSystem.register({
-      id: 'bar-entrance',
+      id: 'courtyard-bar-door',
       position: this.world.barDoorPosition,
-      radius: 2.5,
+      radius: 2.3,
       promptText: '[E] Open the bar door',
       isEnabled: () => !this.world.isBarDoorOpen,
-      onInteract: () => this.world.openBarDoor(),
+      onInteract: () => this.world.openBarDoor(this.player.mesh.position),
     });
     this.interactionSystem.register({
-      id: 'bar-interior-entrance',
-      position: this.world.barInteriorDoorPosition,
+      id: 'bathroom-door',
+      position: this.world.bathroomDoorPosition,
+      radius: 2.2,
+      promptText: '[E] Open bathroom door',
+      isEnabled: () => !this.world.isBathroomDoorOpen,
+      onInteract: () => this.world.openBathroomDoor(this.player.mesh.position),
+    });
+    this.interactionSystem.register({
+      id: 'backyard-door',
+      position: this.world.backyardDoorPosition,
       radius: 2.3,
-      promptText: '[E] Open the door to the bar',
-      isEnabled: () => !this.world.isBarInteriorDoorOpen,
-      onInteract: () => this.world.openBarInteriorDoor(),
+      promptText: '[E] Open back door',
+      isEnabled: () => !this.world.isBackyardDoorOpen,
+      onInteract: () => this.world.openBackyardDoor(this.player.mesh.position),
     });
 
     window.addEventListener('resize', this.onWindowResize);
@@ -86,9 +95,12 @@ export class Game {
 
   private update = (): void => {
     const deltaTime = Math.min(this.clock.getDelta(), 0.1);
+    const worldDeltaTime = this.player.isInSlowMotionFall
+      ? deltaTime * 0.28
+      : deltaTime;
 
     // Move NPCs and refresh their colliders before resolving player movement.
-    this.world.update(deltaTime);
+    this.world.update(worldDeltaTime, this.player.mesh.position);
 
     this.player.update(
       deltaTime,
@@ -98,8 +110,16 @@ export class Game {
       this.world.isPlayerInsideBar(this.player.mesh.position)
     );
 
+    const isPlayerFalling = this.player.isInSlowMotionFall;
+    if (isPlayerFalling && !this.wasPlayerFalling) {
+      this.soundManager.playStairFallSound();
+    }
+    this.wasPlayerFalling = isPlayerFalling;
+
+    this.thirdPersonCamera.setFallViewActive(isPlayerFalling);
+
     this.thirdPersonCamera.update(
-      deltaTime,
+      isPlayerFalling ? deltaTime * 0.28 : deltaTime,
       this.input,
       this.world.colliders
     );

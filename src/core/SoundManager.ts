@@ -3,6 +3,7 @@ export class SoundManager {
   private poolSplashAudio: HTMLAudioElement;
   private duckCollisionAudio: HTMLAudioElement;
   private grannyCollisionAudio: HTMLAudioElement;
+  private stairFallAudio: HTMLAudioElement;
   private barMusicAudio: HTMLAudioElement;
   private isBarMusicActive = false;
   private barTrackIndex = 0;
@@ -29,6 +30,10 @@ export class SoundManager {
     this.grannyCollisionAudio = new Audio('/teri-maa-ka-bosda-fat-jaga.mp3');
     this.grannyCollisionAudio.preload = 'auto';
     this.grannyCollisionAudio.volume = 1.0;
+
+    this.stairFallAudio = new Audio('/ma-ka-bhosda-aag.mp3');
+    this.stairFallAudio.preload = 'auto';
+    this.stairFallAudio.volume = 1.0;
 
     this.barMusicAudio = this.createBarTrackAudio();
 
@@ -68,6 +73,13 @@ export class SoundManager {
     this.grannyCollisionAudio.currentTime = 0;
     this.grannyCollisionAudio.play().catch((err) => {
       console.warn('Could not play /teri-maa-ka-bosda-fat-jaga.mp3:', err);
+    });
+  }
+
+  public playStairFallSound(): void {
+    this.stairFallAudio.currentTime = 0;
+    this.stairFallAudio.play().catch((err) => {
+      console.warn('Could not play /ma-ka-bhosda-aag.mp3:', err);
     });
   }
 

@@ -8,6 +8,8 @@ export class ThirdPersonCamera {
   public yaw = 0; // Horizontal orbit angle (radians)
   private pitch = 0.32; // Vertical orbit angle (radians)
   private isFirstPerson = false;
+  private isFallViewActive = false;
+  private firstPersonBeforeFall = false;
 
   private readonly maxDistance = 6.5;
   private readonly minDistance = 0.8;
@@ -36,7 +38,7 @@ export class ThirdPersonCamera {
     input: InputManager,
     colliders: THREE.Box3[]
   ): void {
-    if (input.wasKeyJustPressed('KeyV')) {
+    if (!this.isFallViewActive && input.wasKeyJustPressed('KeyV')) {
       this.isFirstPerson = !this.isFirstPerson;
       this.target.visible = !this.isFirstPerson;
     }
@@ -48,6 +50,10 @@ export class ThirdPersonCamera {
     const maxPitch = 1.15;
     this.pitch = Math.max(minPitch, Math.min(maxPitch, this.pitch));
 
+    if (this.isFallViewActive) {
+      this.updateFallViewTransform();
+      return;
+    }
     if (this.isFirstPerson) {
       this.updateFirstPersonTransform();
       return;
@@ -55,6 +61,37 @@ export class ThirdPersonCamera {
 
     const smoothFactor = 1 - Math.exp(-18 * deltaTime);
     this.updateCameraTransform(smoothFactor, colliders);
+  }
+
+  private updateFallViewTransform(): void {
+    const playerPosition = this.target.position;
+    const eye = new THREE.Vector3(
+      playerPosition.x,
+      playerPosition.y + 1.58,
+      playerPosition.z
+    );
+    const lookAhead = 2.4;
+    const stairSlope = 0.35 / 0.55;
+    const stairLookAt = new THREE.Vector3(
+      playerPosition.x + lookAhead,
+      Math.max(0.05, playerPosition.y - lookAhead * stairSlope - 0.05),
+      THREE.MathUtils.lerp(playerPosition.z, -18.68, 0.65)
+    );
+    this.camera.position.copy(eye);
+    this.camera.lookAt(stairLookAt);
+  }
+
+  public setFallViewActive(active: boolean): void {
+    if (active === this.isFallViewActive) return;
+    this.isFallViewActive = active;
+    if (active) {
+      this.firstPersonBeforeFall = this.isFirstPerson;
+      this.target.visible = false;
+    } else {
+      this.isFirstPerson = this.firstPersonBeforeFall;
+      this.target.visible = !this.isFirstPerson;
+      this.currentDistance = this.minDistance;
+    }
   }
 
   private updateFirstPersonTransform(): void {

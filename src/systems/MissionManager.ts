@@ -32,10 +32,10 @@ export class MissionManager {
     this.hud = hud;
     this.soundManager = soundManager;
 
-    // Register the secret button inside the East Study room (12.5, 1.0, -16.5)
+    // Register the secret button on the pedestal beside the east-side service rooms.
     interactionSystem.register({
       id: 'secret-gate-button',
-      position: new THREE.Vector3(12.5, 1.0, -16.5),
+      position: new THREE.Vector3(3.7, 1.0, -16.5),
       radius: 2.6,
       promptText: '[E] Press "Definitely Not A Trap" Button',
       isEnabled: () => this.state === MissionState.TRAPPED_FIND_BUTTON,
