@@ -135,6 +135,9 @@ export class Game {
     this.soundManager.setBarMusicActive(
       this.world.isPlayerInsideBar(this.player.mesh.position)
     );
+    this.soundManager.setTempleMusicActive(
+      this.world.isPlayerInsideTemple(this.player.mesh.position)
+    );
     const isInsideBar = this.world.isPlayerInsideBar(this.player.mesh.position);
     this.hud.setBarMusicControlsActive(isInsideBar);
     if (isInsideBar && this.input.wasKeyJustPressed('KeyN')) {

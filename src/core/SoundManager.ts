@@ -6,6 +6,8 @@ export class SoundManager {
   private stairFallAudio: HTMLAudioElement;
   private barMusicAudio: HTMLAudioElement;
   private isBarMusicActive = false;
+  private templeMusicAudio: HTMLAudioElement;
+  private isTempleMusicActive = false;
   private barTrackIndex = 0;
   private readonly barTracks = [
     { path: '/bar_songs/cidxhoneysingh-song.mp3', title: 'Honey Singh' },
@@ -36,6 +38,11 @@ export class SoundManager {
     this.stairFallAudio.volume = 1.0;
 
     this.barMusicAudio = this.createBarTrackAudio();
+
+    this.templeMusicAudio = new Audio('/modi-ji-bhojyam.mp3');
+    this.templeMusicAudio.preload = 'auto';
+    this.templeMusicAudio.loop = true;
+    this.templeMusicAudio.volume = 0.5;
 
   }
 
@@ -92,6 +99,20 @@ export class SoundManager {
     } else {
       this.barMusicAudio.pause();
       this.barMusicAudio.currentTime = 0;
+    }
+  }
+
+  public setTempleMusicActive(active: boolean): void {
+    if (active === this.isTempleMusicActive) return;
+    this.isTempleMusicActive = active;
+
+    if (active) {
+      this.templeMusicAudio.play().catch((err) => {
+        console.warn('Could not play /modi-ji-bhojyam.mp3:', err);
+      });
+    } else {
+      this.templeMusicAudio.pause();
+      this.templeMusicAudio.currentTime = 0;
     }
   }
 

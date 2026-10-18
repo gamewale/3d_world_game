@@ -604,6 +604,7 @@ export class VillaBuilder {
     this.applyInteriorFloorUVs(groundFloor, 32, 18);
 
     this.buildRearEntrance(wallH);
+    this.buildBackyardTemple();
     // Seal the former bar room's west wall after moving the bar outside.
     this.addWallBlock(
       [0.8, wallH, 18.8],
@@ -733,6 +734,80 @@ export class VillaBuilder {
       patioMat,
       true
     );
+  }
+
+  private buildBackyardTemple(): void {
+    // Place the open-front shrine in the far back-right corner, facing the villa.
+    const centerX = 18;
+    const frontZ = -38.7;
+    const backZ = -44.5;
+    const width = 6.4;
+    const plinthHeight = 0.66;
+    const roofY = 5.85;
+    const stoneMat = new THREE.MeshStandardMaterial({ color: 0xf0e5d2, roughness: 0.82 });
+    const trimMat = new THREE.MeshStandardMaterial({ color: 0xb77b32, roughness: 0.52, metalness: 0.16 });
+    const roofMat = new THREE.MeshStandardMaterial({ color: 0x9d3428, roughness: 0.7 });
+    const floorMat = new THREE.MeshStandardMaterial({ color: 0xc9b89b, roughness: 0.9 });
+
+    this.addBlock([7.4, plinthHeight, 6.8], [centerX, plinthHeight / 2, (frontZ + backZ) / 2], stoneMat, true);
+    this.addBlock([6.8, 0.12, 6.2], [centerX, plinthHeight + 0.06, (frontZ + backZ) / 2], floorMat, false);
+
+    // Three enclosed sides create a walk-in shrine, with the villa-facing side open.
+    for (const x of [centerX - 3.05, centerX + 3.05]) {
+      this.addBlock([0.3, 4.9, 5.8], [x, plinthHeight + 2.45, (frontZ + backZ) / 2], stoneMat, true);
+    }
+    this.addBlock([6.1, 5.1, 0.3], [centerX, plinthHeight + 2.55, backZ], stoneMat, true);
+
+    // Broad three-step stair rises from the backyard to the raised temple floor.
+    for (let step = 0; step < 3; step += 1) {
+      const stepHeight = plinthHeight * (step + 1) / 3;
+      this.addBlock(
+        [5.4, stepHeight, 0.52],
+        [centerX, stepHeight / 2, frontZ + 1.55 - step * 0.52],
+        stoneMat,
+        true
+      );
+    }
+
+    // Tall carved-looking entry pillars frame the open side and support the roof.
+    for (const x of [centerX - 2.65, centerX + 2.65]) {
+      this.addBlock([0.42, 5.0, 0.42], [x, plinthHeight + 2.5, frontZ + 0.05], trimMat, true);
+      this.addBlock([0.68, 0.2, 0.68], [x, plinthHeight + 0.1, frontZ + 0.05], stoneMat, false);
+      this.addBlock([0.68, 0.2, 0.68], [x, 5.62, frontZ + 0.05], trimMat, false);
+    }
+
+    // Framed deity image on the inner rear wall. The portrait image keeps its aspect ratio.
+    const frameZ = backZ + 0.2;
+    this.addBlock([2.35, 3.95, 0.18], [centerX, 3.15, frameZ], trimMat, false);
+    const imageTexture = new THREE.TextureLoader().load('/modi_mandir.png');
+    imageTexture.colorSpace = THREE.SRGBColorSpace;
+    const image = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.95, 3.75),
+      new THREE.MeshBasicMaterial({ map: imageTexture, toneMapped: false })
+    );
+    image.position.set(centerX, 3.15, frameZ + 0.11);
+    this.scene.add(image);
+
+    this.addBlock([7.2, 0.32, 6.6], [centerX, roofY, (frontZ + backZ) / 2], trimMat, false);
+    this.addBlock([6.8, 0.28, 6.2], [centerX, roofY + 0.3, (frontZ + backZ) / 2], roofMat, false);
+    this.addBlock([5.2, 0.32, 4.8], [centerX, roofY + 0.62, (frontZ + backZ) / 2], trimMat, false);
+    const spire = new THREE.Mesh(new THREE.ConeGeometry(1.75, 3.4, 4), roofMat);
+    spire.position.set(centerX, roofY + 2.42, (frontZ + backZ) / 2);
+    spire.rotation.y = Math.PI / 4;
+    spire.castShadow = true;
+    spire.receiveShadow = true;
+    this.scene.add(spire);
+    const finial = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), trimMat);
+    finial.position.set(centerX, roofY + 4.18, (frontZ + backZ) / 2);
+    this.scene.add(finial);
+
+    const lampMat = new THREE.MeshStandardMaterial({ color: 0xffd37a, emissive: 0xffa928, emissiveIntensity: 0.8 });
+    for (const x of [centerX - 1.4, centerX + 1.4]) {
+      this.addBlock([0.28, 0.42, 0.28], [x, 0.87, frontZ - 0.5], trimMat, false);
+      const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.13, 12, 10), lampMat);
+      lamp.position.set(x, 1.16, frontZ - 0.5);
+      this.scene.add(lamp);
+    }
   }
 
   private buildGroundFloorFrontFacade(wallHeight: number): void {

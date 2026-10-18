@@ -306,6 +306,12 @@ export class World {
       position.z > 3.8 && position.z < 19.4;
   }
 
+  public isPlayerInsideTemple(position: THREE.Vector3): boolean {
+    // Temple interior bounds; exclude the exterior stair approach.
+    return position.x > 15.25 && position.x < 20.75 &&
+      position.z > -44.2 && position.z < -38.9;
+  }
+
   public pushDuckFromPlayer(
     playerPosition: THREE.Vector3,
     deltaTime: number
