@@ -605,6 +605,7 @@ export class VillaBuilder {
 
     this.buildRearEntrance(wallH);
     this.buildBackyardTemple();
+    this.buildBackyardJuiceStall();
     // Seal the former bar room's west wall after moving the bar outside.
     this.addWallBlock(
       [0.8, wallH, 18.8],
@@ -807,6 +808,150 @@ export class VillaBuilder {
       const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.13, 12, 10), lampMat);
       lamp.position.set(x, 1.16, frontZ - 0.5);
       this.scene.add(lamp);
+    }
+  }
+
+  private buildBackyardJuiceStall(): void {
+    const centerX = 4.8;
+    const frontZ = -39.0;
+    const backZ = -42.2;
+    const woodMat = new THREE.MeshStandardMaterial({ color: 0x754126, roughness: 0.72 });
+    const counterMat = new THREE.MeshStandardMaterial({ color: 0xfff0d0, roughness: 0.76 });
+    const canopyColors = [0xf05a28, 0xffd447, 0x56a75a, 0xffd447, 0xf05a28, 0xffd447, 0x56a75a];
+
+    // Walk-up counter faces the villa entrance and the open backyard.
+    this.addBlock([5.0, 1.02, 0.82], [centerX, 0.63, frontZ], woodMat, true);
+    this.addBlock([5.2, 0.14, 1.02], [centerX, 1.2, frontZ], counterMat, true);
+
+    // Four posts support a striped canopy, leaving the stall open to walk up to.
+    for (const x of [centerX - 2.55, centerX + 2.55]) {
+      for (const z of [frontZ - 0.15, backZ + 0.15]) {
+        this.addBlock([0.16, 2.75, 0.16], [x, 1.55, z], woodMat, true);
+      }
+    }
+    for (let stripe = 0; stripe < canopyColors.length; stripe += 1) {
+      const color = new THREE.MeshStandardMaterial({ color: canopyColors[stripe], roughness: 0.72 });
+      this.addBlock(
+        [5.8 / canopyColors.length, 0.14, 3.8],
+        [centerX - 2.9 + (stripe + 0.5) * (5.8 / canopyColors.length), 2.98, (frontZ + backZ) / 2],
+        color,
+        false
+      );
+    }
+
+    const posterFrameMat = new THREE.MeshStandardMaterial({ color: 0x754126, roughness: 0.62 });
+    const posterY = 0.74;
+    this.addBlock([4.85, 1.42, 0.1], [centerX, posterY, frontZ + 0.54], posterFrameMat, false);
+    const posterTexture = new THREE.TextureLoader().load('/juice_poster.png');
+    posterTexture.colorSpace = THREE.SRGBColorSpace;
+    const poster = new THREE.Mesh(
+      new THREE.PlaneGeometry(4.62, 1.32),
+      new THREE.MeshBasicMaterial({ map: posterTexture, toneMapped: false })
+    );
+    poster.position.set(centerX, posterY, frontZ + 0.60);
+    this.scene.add(poster);
+
+    // A blender and bright fruit display make the counter read as a juice stand.
+    const steelMat = new THREE.MeshStandardMaterial({ color: 0xbac5c8, roughness: 0.28, metalness: 0.68 });
+    this.addBlock([0.48, 0.48, 0.42], [centerX - 1.5, 1.5, frontZ], steelMat, false);
+    const blenderJar = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.16, 0.19, 0.42, 16),
+      new THREE.MeshPhysicalMaterial({ color: 0xc6edf1, roughness: 0.12, transparent: true, opacity: 0.58 })
+    );
+    blenderJar.position.set(centerX - 1.5, 1.95, frontZ);
+    this.scene.add(blenderJar);
+    const fruitColors = [0xff6a2e, 0xf2d333, 0x56ad45, 0xe94343, 0xff9d25, 0x8abf3d];
+    for (let fruit = 0; fruit < fruitColors.length; fruit += 1) {
+      const fruitMesh = new THREE.Mesh(
+        new THREE.SphereGeometry(0.17, 12, 10),
+        new THREE.MeshStandardMaterial({ color: fruitColors[fruit], roughness: 0.45 })
+      );
+      fruitMesh.position.set(
+        centerX + 0.1 + (fruit % 3) * 0.36,
+        1.47 + Math.floor(fruit / 3) * 0.2,
+        frontZ + (fruit % 2) * 0.19
+      );
+      fruitMesh.scale.set(1, 0.9, 1);
+      fruitMesh.castShadow = true;
+      this.scene.add(fruitMesh);
+    }
+
+    // A friendly vendor stands behind the counter facing customers.
+    const seller = new THREE.Group();
+    seller.position.set(centerX + 1.0, 0, frontZ - 0.72);
+    const skinMat = new THREE.MeshStandardMaterial({ color: 0x9b6246, roughness: 0.88 });
+    const shirtMat = new THREE.MeshStandardMaterial({ color: 0x2d8b68, roughness: 0.82 });
+    const apronMat = new THREE.MeshStandardMaterial({ color: 0xf4d7a1, roughness: 0.9 });
+    const hairMat = new THREE.MeshStandardMaterial({ color: 0x231b18, roughness: 0.95 });
+    const eyeMat = new THREE.MeshStandardMaterial({ color: 0x211b18, roughness: 0.7 });
+
+    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.25, 0.42, 5, 10), shirtMat);
+    torso.position.y = 1.15;
+    torso.castShadow = true;
+    seller.add(torso);
+    const apron = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.48, 0.06), apronMat);
+    apron.position.set(0, 1.03, 0.2);
+    seller.add(apron);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 18, 14), skinMat);
+    head.position.set(0, 1.72, 0.02);
+    head.scale.set(0.9, 1.08, 0.9);
+    head.castShadow = true;
+    seller.add(head);
+    const hair = new THREE.Mesh(new THREE.SphereGeometry(0.225, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.48), hairMat);
+    hair.position.set(0, 1.76, 0.015);
+    seller.add(hair);
+    for (const eyeX of [-0.075, 0.075]) {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.022, 8, 8), eyeMat);
+      eye.position.set(eyeX, 1.75, 0.215);
+      seller.add(eye);
+    }
+    const nose = new THREE.Mesh(new THREE.SphereGeometry(0.035, 10, 8), skinMat);
+    nose.position.set(0, 1.69, 0.235);
+    seller.add(nose);
+    for (const side of [-1, 1]) {
+      const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.085, 0.42, 4, 8), shirtMat);
+      arm.position.set(side * 0.31, 1.17, 0.16);
+      arm.rotation.x = Math.PI / 2.8;
+      arm.rotation.z = side * -0.12;
+      arm.castShadow = true;
+      seller.add(arm);
+      const hand = new THREE.Mesh(new THREE.SphereGeometry(0.085, 10, 8), skinMat);
+      hand.position.set(side * 0.37, 1.03, 0.36);
+      seller.add(hand);
+    }
+    this.scene.add(seller);
+
+    // Nested paper cups are stacked at the customer end of the counter.
+    const cupMat = new THREE.MeshStandardMaterial({ color: 0xfffbf0, roughness: 0.58 });
+    const cupBandMat = new THREE.MeshStandardMaterial({ color: 0xe85c37, roughness: 0.65 });
+    const cupX = centerX + 1.95;
+    const cupZ = frontZ + 0.12;
+    for (let cup = 0; cup < 5; cup += 1) {
+      const cupY = 1.31 + cup * 0.14;
+      const disposableCup = new THREE.Mesh(new THREE.CylinderGeometry(0.135, 0.095, 0.24, 16), cupMat);
+      disposableCup.position.set(cupX, cupY, cupZ);
+      disposableCup.castShadow = true;
+      disposableCup.receiveShadow = true;
+      this.scene.add(disposableCup);
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.119, 0.11, 0.045, 16), cupBandMat);
+      band.position.set(cupX, cupY - 0.025, cupZ);
+      this.scene.add(band);
+    }
+
+    // Customer seating faces the walk-up counter and sits clear of the temple stairs.
+    const chairPath = '/models/plastic_monobloc_chair_01_1k.gltf/plastic_monobloc_chair_01_1k.gltf';
+    const chairSpots: Array<[number, number, number]> = [
+      [centerX - 2.1, frontZ + 1.4, Math.PI + 0.42],
+      [centerX + 0.15, frontZ + 1.8, Math.PI - 0.28],
+      [centerX + 2.0, frontZ + 1.25, Math.PI + 0.86],
+    ];
+    for (const [x, z, angle] of chairSpots) {
+      this.loadHallFurnitureModel(
+        chairPath,
+        new THREE.Vector3(x, 0, z),
+        1.0,
+        angle
+      );
     }
   }
 

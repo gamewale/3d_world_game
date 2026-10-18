@@ -138,6 +138,9 @@ export class Game {
     this.soundManager.setTempleMusicActive(
       this.world.isPlayerInsideTemple(this.player.mesh.position)
     );
+    this.soundManager.setJuiceStallReached(
+      this.world.isPlayerAtJuiceStall(this.player.mesh.position)
+    );
     const isInsideBar = this.world.isPlayerInsideBar(this.player.mesh.position);
     this.hud.setBarMusicControlsActive(isInsideBar);
     if (isInsideBar && this.input.wasKeyJustPressed('KeyN')) {

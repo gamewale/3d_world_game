@@ -312,6 +312,12 @@ export class World {
       position.z > -44.2 && position.z < -38.9;
   }
 
+  public isPlayerAtJuiceStall(position: THREE.Vector3): boolean {
+    return position.y < 2.2 &&
+      position.x > 0.8 && position.x < 8.8 &&
+      position.z > -42.8 && position.z < -35.5;
+  }
+
   public pushDuckFromPlayer(
     playerPosition: THREE.Vector3,
     deltaTime: number

@@ -8,6 +8,8 @@ export class SoundManager {
   private isBarMusicActive = false;
   private templeMusicAudio: HTMLAudioElement;
   private isTempleMusicActive = false;
+  private juiceStallAudio: HTMLAudioElement;
+  private isPlayerAtJuiceStall = false;
   private barTrackIndex = 0;
   private readonly barTracks = [
     { path: '/bar_songs/cidxhoneysingh-song.mp3', title: 'Honey Singh' },
@@ -43,6 +45,10 @@ export class SoundManager {
     this.templeMusicAudio.preload = 'auto';
     this.templeMusicAudio.loop = true;
     this.templeMusicAudio.volume = 0.5;
+
+    this.juiceStallAudio = new Audio('/vaste-gana-hoiyeinnn.mp3');
+    this.juiceStallAudio.preload = 'auto';
+    this.juiceStallAudio.volume = 0.85;
 
   }
 
@@ -114,6 +120,19 @@ export class SoundManager {
       this.templeMusicAudio.pause();
       this.templeMusicAudio.currentTime = 0;
     }
+  }
+
+  public setJuiceStallReached(reached: boolean): void {
+    if (reached && !this.isPlayerAtJuiceStall) {
+      this.juiceStallAudio.currentTime = 0;
+      this.juiceStallAudio.play().catch((err) => {
+        console.warn('Could not play /vaste-gana-hoiyeinnn.mp3:', err);
+      });
+    } else if (!reached && this.isPlayerAtJuiceStall) {
+      this.juiceStallAudio.pause();
+      this.juiceStallAudio.currentTime = 0;
+    }
+    this.isPlayerAtJuiceStall = reached;
   }
 
   public nextBarTrack(): string {
