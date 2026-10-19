@@ -263,6 +263,10 @@ export class World {
 
   }
 
+  public get biscuitCartPosition(): THREE.Vector3 | null {
+    return this.builder.getBiscuitCartPosition();
+  }
+
   public get bathroomDoorPosition(): THREE.Vector3 {
     return this.builder.bathroomDoor.interactionPosition;
   }

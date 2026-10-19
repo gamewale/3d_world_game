@@ -110,6 +110,15 @@ export class Game {
       this.world.isPlayerInsideBar(this.player.mesh.position)
     );
 
+    const biscuitCartPosition = this.world.biscuitCartPosition;
+    if (biscuitCartPosition) {
+      this.soundManager.updateBiscuitCartAudio(
+        this.player.mesh.position,
+        biscuitCartPosition,
+        deltaTime
+      );
+    }
+
     const isPlayerFalling = this.player.isInSlowMotionFall;
     if (isPlayerFalling && !this.wasPlayerFalling) {
       this.soundManager.playStairFallSound();

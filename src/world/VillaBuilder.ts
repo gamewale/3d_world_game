@@ -24,6 +24,22 @@ export class VillaBuilder {
   private readonly discoBulbs: THREE.Mesh[] = [];
   private readonly discoBall: THREE.Mesh;
   private discoElapsed = 0;
+  private biscuitSeller: THREE.Group | null = null;
+  private biscuitSellerHead: THREE.Group | null = null;
+  private readonly biscuitSellerArms: THREE.Group[] = [];
+  private readonly biscuitSellerLegs: THREE.Group[] = [];
+  private biscuitFireLight: THREE.PointLight | null = null;
+  private readonly biscuitCoals: THREE.Mesh[] = [];
+  private biscuitCart: THREE.Group | null = null;
+  private biscuitCartCollider: THREE.Box3 | null = null;
+  private readonly biscuitCartWheels: THREE.Mesh[] = [];
+  private biscuitCartElapsed = 0;
+  private readonly biscuitCartRunway = {
+    leftX: -19,
+    rightX: 19,
+    topZ: -23,
+    bottomZ: 1,
+  };
   public poolWaterMesh: THREE.Mesh | null = null;
 
   private perimeterWallMat: THREE.MeshStandardMaterial;
@@ -606,6 +622,7 @@ export class VillaBuilder {
     this.buildRearEntrance(wallH);
     this.buildBackyardTemple();
     this.buildBackyardJuiceStall();
+    this.buildBackyardBiscuitCart();
     // Seal the former bar room's west wall after moving the bar outside.
     this.addWallBlock(
       [0.8, wallH, 18.8],
@@ -953,6 +970,203 @@ export class VillaBuilder {
         angle
       );
     }
+  }
+
+  private buildBackyardBiscuitCart(): void {
+    const sceneChildStart = this.scene.children.length;
+    const colliderStart = this.colliders.length;
+    const centerX = this.biscuitCartRunway.rightX;
+    const centerZ = this.biscuitCartRunway.bottomZ;
+    const woodMat = new THREE.MeshStandardMaterial({ color: 0x6f4227, roughness: 0.78 });
+    const darkWoodMat = new THREE.MeshStandardMaterial({ color: 0x33251f, roughness: 0.84 });
+    const ironMat = new THREE.MeshStandardMaterial({ color: 0x34383a, roughness: 0.48, metalness: 0.58 });
+    const wheelMat = new THREE.MeshStandardMaterial({ color: 0x312923, roughness: 0.78 });
+    const biscuitMat = new THREE.MeshStandardMaterial({ color: 0xc9893e, roughness: 0.72 });
+    const biscuitTopMat = new THREE.MeshStandardMaterial({ color: 0xe2b76c, roughness: 0.82 });
+
+    // A four-wheel handcart with a raised serving bed and open customer side.
+    this.addBlock([4.3, 0.18, 2.35], [centerX, 0.94, centerZ], woodMat, true);
+    this.addBlock([4.3, 0.62, 0.14], [centerX, 1.32, centerZ - 1.1], woodMat, true);
+    this.addBlock([4.3, 0.38, 0.12], [centerX, 1.2, centerZ + 1.12], woodMat, true);
+    for (const x of [centerX - 2.08, centerX + 2.08]) {
+      this.addBlock([0.12, 0.62, 2.2], [x, 1.32, centerZ], woodMat, true);
+    }
+    for (const x of [centerX - 1.55, centerX + 1.55]) {
+      for (const zSide of [-1, 1]) {
+        const z = centerZ + zSide * 1.2;
+        const wheelAssembly = new THREE.Group();
+        wheelAssembly.position.set(x, 0.58, z);
+        wheelAssembly.rotation.x = Math.PI / 2;
+        const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.56, 0.56, 0.18, 24), wheelMat);
+        wheel.castShadow = true;
+        wheel.receiveShadow = true;
+        wheelAssembly.add(wheel);
+        this.biscuitCartWheels.push(wheel);
+        const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.2, 16), ironMat);
+        wheel.add(hub);
+        for (let spoke = 0; spoke < 8; spoke += 1) {
+          const angle = (spoke / 8) * Math.PI * 2;
+          const spokeMesh = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.045, 0.07), woodMat);
+          spokeMesh.position.set(Math.cos(angle) * 0.19, 0, Math.sin(angle) * 0.19);
+          spokeMesh.rotation.y = -angle;
+          spokeMesh.castShadow = true;
+          wheel.add(spokeMesh);
+        }
+        this.scene.add(wheelAssembly);
+      }
+    }
+
+    // Paired push handles extend from the narrow end of the cart.
+    for (const z of [centerZ - 0.65, centerZ + 0.65]) {
+      const handle = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.13, 0.13), darkWoodMat);
+      handle.position.set(centerX - 2.85, 0.9, z);
+      handle.castShadow = true;
+      this.scene.add(handle);
+      const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.42, 12), ironMat);
+      grip.rotation.z = Math.PI / 2;
+      grip.position.set(centerX - 3.58, 0.9, z);
+      this.scene.add(grip);
+    }
+
+    // The coal-fired oven faces forward from the cart's narrow end.
+    const ovenX = centerX + 0.45;
+    const ovenZ = centerZ;
+    this.addBlock([1.65, 0.9, 1.25], [ovenX, 1.5, ovenZ], ironMat, true);
+    const ovenMouth = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.88, 0.4),
+      new THREE.MeshStandardMaterial({ color: 0x140b08, roughness: 0.94, emissive: 0x2a0d05 })
+    );
+    ovenMouth.position.set(ovenX + 0.83, 1.43, ovenZ);
+    ovenMouth.rotation.y = Math.PI / 2;
+    this.scene.add(ovenMouth);
+    const coalMat = new THREE.MeshStandardMaterial({
+      color: 0xff6b20,
+      emissive: 0xff3d08,
+      emissiveIntensity: 0.9,
+      roughness: 0.74,
+    });
+    for (let coal = 0; coal < 5; coal += 1) {
+      const coalMesh = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8), coalMat.clone());
+      coalMesh.position.set(
+        ovenX + 0.68,
+        1.34 + (coal % 2) * 0.04,
+        ovenZ - 0.3 + (coal % 3) * 0.3
+      );
+      this.biscuitCoals.push(coalMesh);
+      this.scene.add(coalMesh);
+    }
+    const fireLight = new THREE.PointLight(0xff5a16, 1.4, 3.8);
+    fireLight.position.set(ovenX + 0.95, 1.48, ovenZ);
+    this.scene.add(fireLight);
+    this.biscuitFireLight = fireLight;
+
+    const griddle = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 0.12, 24), ironMat);
+    griddle.position.set(ovenX, 2.01, ovenZ + 0.08);
+    griddle.castShadow = true;
+    griddle.receiveShadow = true;
+    this.scene.add(griddle);
+    // Small golden biscuits on the hot griddle and in a serving tray.
+    for (let cookie = 0; cookie < 7; cookie += 1) {
+      const angle = (cookie / 7) * Math.PI * 2;
+      const biscuit = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.14, 0.055, 14), biscuitMat);
+      biscuit.position.set(ovenX + Math.cos(angle) * 0.52, 2.1, ovenZ + 0.08 + Math.sin(angle) * 0.48);
+      biscuit.castShadow = true;
+      this.scene.add(biscuit);
+      const top = new THREE.Mesh(new THREE.CylinderGeometry(0.105, 0.11, 0.012, 14), biscuitTopMat);
+      top.position.set(biscuit.position.x, 2.135, biscuit.position.z);
+      this.scene.add(top);
+    }
+    this.addBlock([0.95, 0.1, 0.68], [centerX + 1.28, 1.68, centerZ + 0.28], ironMat, false);
+    for (let cookie = 0; cookie < 4; cookie += 1) {
+      const biscuit = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.12, 0.05, 12), biscuitMat);
+      biscuit.position.set(centerX + 0.95 + (cookie % 2) * 0.36, 1.76, centerZ + 0.08 + Math.floor(cookie / 2) * 0.3);
+      biscuit.castShadow = true;
+      this.scene.add(biscuit);
+    }
+
+    // The seller walks behind the handles and pushes the cart along its backyard route.
+    const seller = new THREE.Group();
+    seller.position.set(centerX - 3.92, 0, centerZ);
+    seller.rotation.y = Math.PI / 2;
+    const skinMat = new THREE.MeshStandardMaterial({ color: 0x9a6248, roughness: 0.86 });
+    const shirtMat = new THREE.MeshStandardMaterial({ color: 0x316b8a, roughness: 0.82 });
+    const pantsMat = new THREE.MeshStandardMaterial({ color: 0x37312e, roughness: 0.9 });
+    const scarfMat = new THREE.MeshStandardMaterial({ color: 0xc94d32, roughness: 0.8 });
+    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.25, 0.38, 5, 10), shirtMat);
+    torso.position.y = 1.24;
+    torso.rotation.x = -0.08;
+    torso.castShadow = true;
+    seller.add(torso);
+    const apron = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.46, 0.06), scarfMat);
+    apron.position.set(0, 1.18, 0.2);
+    seller.add(apron);
+    for (const side of [-1, 1]) {
+      const leg = new THREE.Group();
+      leg.position.set(side * 0.14, 0.86, 0);
+      const shin = new THREE.Mesh(new THREE.CapsuleGeometry(0.09, 0.48, 4, 8), pantsMat);
+      shin.position.y = -0.36;
+      shin.castShadow = true;
+      leg.add(shin);
+      const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.1, 0.3), darkWoodMat);
+      shoe.position.set(0, -0.76, 0.08);
+      leg.add(shoe);
+      seller.add(leg);
+      this.biscuitSellerLegs.push(leg);
+    }
+    const head = new THREE.Group();
+    head.position.set(0, 1.91, 0.02);
+    const face = new THREE.Mesh(new THREE.SphereGeometry(0.21, 18, 14), skinMat);
+    face.scale.set(0.9, 1.06, 0.92);
+    face.castShadow = true;
+    head.add(face);
+    const hair = new THREE.Mesh(new THREE.SphereGeometry(0.215, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.48), pantsMat);
+    hair.position.y = 0.04;
+    head.add(hair);
+    for (const eyeX of [-0.07, 0.07]) {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.02, 8, 8), pantsMat);
+      eye.position.set(eyeX, -0.005, 0.19);
+      head.add(eye);
+    }
+    seller.add(head);
+    this.biscuitSellerHead = head;
+
+    for (const side of [-1, 1]) {
+      const shoulder = new THREE.Group();
+      shoulder.position.set(side * 0.25, 1.48, 0.04);
+      const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.085, 0.36, 4, 8), shirtMat);
+      arm.position.y = -0.2;
+      arm.rotation.x = 0.62;
+      arm.rotation.z = -side * 0.38;
+      arm.castShadow = true;
+      shoulder.add(arm);
+      const hand = new THREE.Mesh(new THREE.SphereGeometry(0.075, 10, 8), skinMat);
+      hand.position.set(side * 0.58, -0.43, 0.3);
+      shoulder.add(hand);
+      this.biscuitSellerArms.push(shoulder);
+      seller.add(shoulder);
+    }
+    this.scene.add(seller);
+    this.biscuitSeller = seller;
+
+    // Gather the cart and vendor into one moving unit, preserving their world positions.
+    const cartParts = this.scene.children.slice(sceneChildStart);
+    const cart = new THREE.Group();
+    cart.position.set(centerX, 0, centerZ);
+    cart.rotation.y = -Math.PI / 2;
+    this.scene.add(cart);
+    cart.updateMatrixWorld(true);
+    for (const part of cartParts) cart.attach(part);
+
+    // Replace the build-time static colliders with one collider that follows the cart.
+    this.colliders.splice(colliderStart);
+    const cartCollider = new THREE.Box3();
+    cart.updateMatrixWorld(true);
+    for (const part of cart.children) {
+      if (part !== seller) cartCollider.expandByObject(part);
+    }
+    this.colliders.push(cartCollider);
+    this.biscuitCart = cart;
+    this.biscuitCartCollider = cartCollider;
   }
 
   private buildGroundFloorFrontFacade(wallHeight: number): void {
@@ -1735,12 +1949,81 @@ export class VillaBuilder {
 
   public updateBarScene(deltaTime: number): void {
     this.discoElapsed += deltaTime;
+    this.biscuitCartElapsed += deltaTime;
     this.discoBall.rotation.y += deltaTime * 0.45;
     this.discoBall.rotation.x = Math.sin(this.discoElapsed * 0.35) * 0.12;
     this.ceilingFanRotors.forEach((rotor) => {
       rotor.rotation.y += deltaTime * 10;
     });
     this.barDancers.forEach((dancer) => dancer.update(deltaTime));
+
+    if (this.biscuitCart && this.biscuitCartCollider) {
+      const { leftX, rightX, topZ, bottomZ } = this.biscuitCartRunway;
+      const width = rightX - leftX;
+      const depth = bottomZ - topZ;
+      const loopLength = 2 * (width + depth);
+      let distance = (this.biscuitCartElapsed * 1.05) % loopLength;
+      let x: number;
+      let z: number;
+      let directionX: number;
+      let directionZ: number;
+
+      // Traverse a rectangular loop around all four sides of the Villa.
+      if (distance < depth) {
+        x = rightX;
+        z = bottomZ - distance;
+        directionX = 0;
+        directionZ = -1;
+      } else if (distance < depth + width) {
+        const straightDistance = distance - depth;
+        x = rightX - straightDistance;
+        z = topZ;
+        directionX = -1;
+        directionZ = 0;
+      } else if (distance < depth * 2 + width) {
+        const straightDistance = distance - depth - width;
+        x = leftX;
+        z = topZ + straightDistance;
+        directionX = 0;
+        directionZ = 1;
+      } else {
+        const straightDistance = distance - depth * 2 - width;
+        x = leftX + straightDistance;
+        z = bottomZ;
+        directionX = 1;
+        directionZ = 0;
+      }
+      this.biscuitCart.position.set(x, 0, z);
+      this.biscuitCart.rotation.y = Math.atan2(-directionZ, directionX) + (3 * Math.PI) / 2;
+      this.biscuitCart.updateMatrixWorld(true);
+      const wheelRoll = (1.05 / 0.56) * deltaTime;
+      this.biscuitCartWheels.forEach((wheel) => wheel.rotateY(-wheelRoll));
+
+      this.biscuitCartCollider.makeEmpty();
+      for (const part of this.biscuitCart.children) {
+        if (part !== this.biscuitSeller) this.biscuitCartCollider.expandByObject(part);
+      }
+    }
+    if (this.biscuitSellerHead) {
+      this.biscuitSellerHead.rotation.y = Math.sin(this.biscuitCartElapsed * 0.55) * 0.12;
+      this.biscuitSellerHead.rotation.z = Math.sin(this.biscuitCartElapsed * 1.1) * 0.025;
+    }
+    if (this.biscuitSeller) {
+      this.biscuitSeller.position.y = Math.abs(Math.sin(this.biscuitCartElapsed * 5)) * 0.018;
+    }
+    this.biscuitSellerArms.forEach((arm, index) => {
+      arm.rotation.x = Math.sin(this.biscuitCartElapsed * 5 + index * Math.PI) * 0.07;
+    });
+    this.biscuitSellerLegs.forEach((leg, index) => {
+      leg.rotation.x = Math.sin(this.biscuitCartElapsed * 5 + index * Math.PI) * 0.16;
+    });
+    this.biscuitCoals.forEach((coal, index) => {
+      const material = coal.material as THREE.MeshStandardMaterial;
+      material.emissiveIntensity = 0.65 + (Math.sin(this.biscuitCartElapsed * 4 + index) + 1) * 0.45;
+    });
+    if (this.biscuitFireLight) {
+      this.biscuitFireLight.intensity = 1.2 + (Math.sin(this.biscuitCartElapsed * 4.2) + 1) * 0.55;
+    }
 
     const centerX = -12.2 + this.barCourtyardOffset.x;
     const centerZ = -9.2 + this.barCourtyardOffset.z;
@@ -1755,6 +2038,10 @@ export class VillaBuilder {
       material.color.copy(light.color);
       material.emissive.copy(light.color);
     });
+  }
+
+  public getBiscuitCartPosition(): THREE.Vector3 | null {
+    return this.biscuitCart?.position ?? null;
   }
 
   private populateRooms(): void {
@@ -1837,6 +2124,7 @@ export class VillaBuilder {
     this.addBlock([1.4, 1.1, 1.4], [3.7, 0.55, -16.5], pedestalMat, true);
 
     this.addHallTelevision();
+    this.addHallPhotoFrame();
   }
 
   private buildModernHallCeiling(): void {
@@ -2096,6 +2384,41 @@ export class VillaBuilder {
     this.scene.add(screen);
   }
 
+  private addHallPhotoFrame(): void {
+    const wallFaceX = 10.89;
+    const centerY = 3.12;
+    const centerZ = -17.5;
+    const width = 1.38;
+    const height = 1.38;
+    const rail = 0.09;
+    const depth = 0.12;
+    const frameMat = new THREE.MeshStandardMaterial({
+      color: 0x68452d,
+      roughness: 0.48,
+      metalness: 0.12,
+    });
+
+    const frame = new THREE.Mesh(
+      new THREE.BoxGeometry(width, height, depth),
+      frameMat
+    );
+    frame.position.set(wallFaceX - depth / 2, centerY, centerZ);
+    frame.rotation.y = -Math.PI / 2;
+    frame.castShadow = true;
+    frame.receiveShadow = true;
+    this.scene.add(frame);
+
+    const photoTexture = new THREE.TextureLoader().load('/cheemdiyapng');
+    photoTexture.colorSpace = THREE.SRGBColorSpace;
+    const photo = new THREE.Mesh(
+      new THREE.PlaneGeometry(width - rail * 2, height - rail * 2),
+      new THREE.MeshBasicMaterial({ map: photoTexture, toneMapped: false })
+    );
+    photo.position.set(wallFaceX - depth - 0.006, centerY, centerZ);
+    photo.rotation.y = -Math.PI / 2;
+    this.scene.add(photo);
+  }
+
   private loadHallFurnitureModel(
     path: string,
     position: THREE.Vector3,
@@ -2160,8 +2483,6 @@ export class VillaBuilder {
   private buildTropicalTrees(): void {
     const palmCoords: [number, number][] = [
       [19, 16],
-      [-20, -14],
-      [20, -14],
       [-14, 22.4],
       [14, 22.4],
     ];

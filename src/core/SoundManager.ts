@@ -1,3 +1,5 @@
+import * as THREE from 'three';
+
 export class SoundManager {
   private trapAudio: HTMLAudioElement;
   private poolSplashAudio: HTMLAudioElement;
@@ -10,6 +12,12 @@ export class SoundManager {
   private isTempleMusicActive = false;
   private juiceStallAudio: HTMLAudioElement;
   private isPlayerAtJuiceStall = false;
+  private biscuitCartAudio: HTMLAudioElement;
+  private isBiscuitCartAudioPlaying = false;
+  private biscuitCartAudioAttemptedThisVisit = false;
+  private biscuitCartAudioVolume = 0;
+  private previousBiscuitPlayerPosition: THREE.Vector3 | null = null;
+  private previousBiscuitCartPosition: THREE.Vector3 | null = null;
   private barTrackIndex = 0;
   private readonly barTracks = [
     { path: '/bar_songs/cidxhoneysingh-song.mp3', title: 'Honey Singh' },
@@ -49,6 +57,11 @@ export class SoundManager {
     this.juiceStallAudio = new Audio('/vaste-gana-hoiyeinnn.mp3');
     this.juiceStallAudio.preload = 'auto';
     this.juiceStallAudio.volume = 0.85;
+
+    this.biscuitCartAudio = new Audio('/nankhatai.mp3');
+    this.biscuitCartAudio.preload = 'auto';
+    this.biscuitCartAudio.loop = true;
+    this.biscuitCartAudio.volume = 0;
 
   }
 
@@ -133,6 +146,73 @@ export class SoundManager {
       this.juiceStallAudio.currentTime = 0;
     }
     this.isPlayerAtJuiceStall = reached;
+  }
+
+  public updateBiscuitCartAudio(
+    playerPosition: THREE.Vector3,
+    cartPosition: THREE.Vector3,
+    deltaTime: number
+  ): void {
+    const listenRadius = 24;
+    const distance = playerPosition.distanceTo(cartPosition);
+    const isNearCart = distance < listenRadius;
+
+    if (isNearCart) {
+      if (!this.isBiscuitCartAudioPlaying && !this.biscuitCartAudioAttemptedThisVisit) {
+        this.biscuitCartAudio.currentTime = 0;
+        this.biscuitCartAudio.play().catch((err) => {
+          console.warn('Could not play /nankhatai.mp3:', err);
+          this.isBiscuitCartAudioPlaying = false;
+        });
+        this.isBiscuitCartAudioPlaying = true;
+        this.biscuitCartAudioAttemptedThisVisit = true;
+      }
+
+      const proximity = THREE.MathUtils.clamp(1 - distance / listenRadius, 0, 1);
+      const targetVolume = 0.85 * Math.pow(proximity, 2.4);
+      const smoothing = 1 - Math.exp(-Math.max(deltaTime, 0) * 8);
+      this.biscuitCartAudioVolume = THREE.MathUtils.lerp(
+        this.biscuitCartAudioVolume,
+        targetVolume,
+        smoothing
+      );
+      this.biscuitCartAudio.volume = this.biscuitCartAudioVolume;
+
+      if (this.previousBiscuitPlayerPosition && this.previousBiscuitCartPosition && deltaTime > 0) {
+        const playerVelocity = playerPosition
+          .clone()
+          .sub(this.previousBiscuitPlayerPosition)
+          .multiplyScalar(1 / deltaTime);
+        const cartVelocity = cartPosition
+          .clone()
+          .sub(this.previousBiscuitCartPosition)
+          .multiplyScalar(1 / deltaTime);
+        const directionFromCartToPlayer = playerPosition.clone().sub(cartPosition);
+        if (directionFromCartToPlayer.lengthSq() > 0.0001) {
+          directionFromCartToPlayer.normalize();
+          const closingSpeed = cartVelocity.sub(playerVelocity).dot(directionFromCartToPlayer);
+          // Apply the physical Doppler ratio from the relative radial speed.
+          this.biscuitCartAudio.playbackRate = THREE.MathUtils.clamp(
+            343 / (343 - THREE.MathUtils.clamp(closingSpeed, -30, 30)),
+            0.9,
+            1.1
+          );
+        }
+      }
+    } else {
+      if (this.isBiscuitCartAudioPlaying) {
+        this.biscuitCartAudio.pause();
+        this.biscuitCartAudio.currentTime = 0;
+        this.isBiscuitCartAudioPlaying = false;
+      }
+      this.biscuitCartAudioAttemptedThisVisit = false;
+      this.biscuitCartAudioVolume = 0;
+      this.biscuitCartAudio.volume = 0;
+      this.biscuitCartAudio.playbackRate = 1;
+    }
+
+    this.previousBiscuitPlayerPosition = playerPosition.clone();
+    this.previousBiscuitCartPosition = cartPosition.clone();
   }
 
   public nextBarTrack(): string {
