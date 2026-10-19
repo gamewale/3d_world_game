@@ -6,6 +6,9 @@ export class SoundManager {
   private duckCollisionAudio: HTMLAudioElement;
   private grannyCollisionAudio: HTMLAudioElement;
   private stairFallAudio: HTMLAudioElement;
+  private phoneCallAudio: HTMLAudioElement;
+  private phoneCallTimeout: number | null = null;
+  private phoneCallCutoffTimeout: number | null = null;
   private barMusicAudio: HTMLAudioElement;
   private isBarMusicActive = false;
   private templeMusicAudio: HTMLAudioElement;
@@ -46,6 +49,10 @@ export class SoundManager {
     this.stairFallAudio = new Audio('/ma-ka-bhosda-aag.mp3');
     this.stairFallAudio.preload = 'auto';
     this.stairFallAudio.volume = 1.0;
+
+    this.phoneCallAudio = new Audio('/kis-color-chaddi-pehne-ho.mp3');
+    this.phoneCallAudio.preload = 'auto';
+    this.phoneCallAudio.volume = 1.0;
 
     this.barMusicAudio = this.createBarTrackAudio();
 
@@ -107,6 +114,34 @@ export class SoundManager {
     this.stairFallAudio.play().catch((err) => {
       console.warn('Could not play /ma-ka-bhosda-aag.mp3:', err);
     });
+  }
+
+  public playPhoneCallSound(): void {
+    this.stopPhoneCallSound();
+    this.phoneCallTimeout = window.setTimeout(() => {
+      this.phoneCallTimeout = null;
+      this.phoneCallAudio.currentTime = 0;
+      this.phoneCallAudio.play().catch((err) => {
+        console.warn('Could not play /kis-color-chaddi-pehne-ho.mp3:', err);
+      });
+    }, 3000);
+    this.phoneCallCutoffTimeout = window.setTimeout(() => {
+      this.phoneCallCutoffTimeout = null;
+      this.stopPhoneCallSound();
+    }, 8000);
+  }
+
+  public stopPhoneCallSound(): void {
+    if (this.phoneCallTimeout !== null) {
+      window.clearTimeout(this.phoneCallTimeout);
+      this.phoneCallTimeout = null;
+    }
+    if (this.phoneCallCutoffTimeout !== null) {
+      window.clearTimeout(this.phoneCallCutoffTimeout);
+      this.phoneCallCutoffTimeout = null;
+    }
+    this.phoneCallAudio.pause();
+    this.phoneCallAudio.currentTime = 0;
   }
 
   public setBarMusicActive(active: boolean): void {

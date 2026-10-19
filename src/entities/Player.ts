@@ -25,9 +25,14 @@ export class Player {
   private runAction: THREE.AnimationAction | null = null;
   private jumpAction: THREE.AnimationAction | null = null;
   private danceAction: THREE.AnimationAction | null = null;
+  private phoneCallAction: THREE.AnimationAction | null = null;
   private currentAction: THREE.AnimationAction | null = null;
   private isLoaded = false;
   private isDancing = false;
+  private isMakingPhoneCall = false;
+  private phoneCallWasCancelled = false;
+  private phoneCallElapsed = 0;
+  private readonly phoneCallDuration = 8;
   private isFallingDownstairs = false;
   private downstairsFallElapsed = 0;
   private readonly downstairsFallDuration = 3.2;
@@ -44,6 +49,14 @@ export class Player {
     return this.isFallingDownstairs;
   }
 
+  public get isMakingPhoneCallNow(): boolean {
+    return this.isMakingPhoneCall;
+  }
+
+  public get phoneCallWasCancelledThisFrame(): boolean {
+    return this.phoneCallWasCancelled;
+  }
+
   private loadCharacterModel(): void {
     const loader = new FBXLoader();
 
@@ -58,6 +71,11 @@ export class Player {
             child.receiveShadow = true;
           }
         });
+
+        // FBX pivots are not guaranteed to sit at the character's soles.
+        // Offset the rendered rig so its lowest point rests on the player's
+        // ground-level collision origin.
+        this.alignModelFeetToGround(fbx);
 
         this.mesh.add(fbx);
 
@@ -82,6 +100,7 @@ export class Player {
       if (idleClip && this.mixer) {
         // FBXLoader strips the colon from Mixamo bone names. The idle export
         // uses `mixamorigHips`, while this character uses `mixamorig5Hips`.
+        this.removeRootMotion(idleClip);
         idleClip.tracks.forEach((track) => {
           track.name = track.name.replace(/^mixamorig(?=[A-Z])/g, 'mixamorig5');
         });
@@ -89,6 +108,8 @@ export class Player {
         this.idleAction.setEffectiveWeight(1.0);
         this.currentAction = this.idleAction;
         this.currentAction.play();
+        this.mixer.update(0);
+        this.alignModelFeetToGround(targetModel);
         this.isLoaded = true;
       }
     });
@@ -139,6 +160,40 @@ export class Player {
     }, undefined, (err) => {
       console.warn('Could not load /models/Wave Hip Hop Dance.fbx:', err);
     });
+
+    loader.load('/models/Talking%20On%20A%20Cell%20Phone.fbx', (phoneFbx) => {
+      const phoneClip = phoneFbx.animations[0];
+      if (!phoneClip || !this.mixer) return;
+
+      phoneClip.tracks.forEach((track) => {
+        track.name = track.name.replace(/^mixamorig(?=[A-Z])/g, 'mixamorig5');
+      });
+      this.removeRootMotion(phoneClip);
+      this.phoneCallAction = this.mixer.clipAction(phoneClip, targetModel);
+      this.phoneCallAction.setLoop(THREE.LoopRepeat, Infinity);
+    }, undefined, (err) => {
+      console.warn('Could not load /models/Talking On A Cell Phone.fbx:', err);
+    });
+  }
+
+  public playPhoneCallAnimation(): boolean {
+    if (!this.isGrounded || this.isDancing || this.isFallingDownstairs || !this.phoneCallAction) {
+      return false;
+    }
+
+    this.isMakingPhoneCall = true;
+    this.phoneCallElapsed = 0;
+    this.velocity.x = 0;
+    this.velocity.z = 0;
+    this.phoneCallAction
+      .reset()
+      .setEffectiveTimeScale(3)
+      .setEffectiveWeight(1)
+      .fadeIn(0.15)
+      .play();
+    if (this.currentAction) this.currentAction.fadeOut(0.15);
+    this.currentAction = this.phoneCallAction;
+    return true;
   }
 
   private removeRootMotion(clip: THREE.AnimationClip): void {
@@ -155,6 +210,15 @@ export class Player {
       values[i] = firstPosition[0];
       values[i + 1] = firstPosition[1];
       values[i + 2] = firstPosition[2];
+    }
+  }
+
+  private alignModelFeetToGround(model: THREE.Object3D): void {
+    model.updateMatrixWorld(true);
+    const bounds = new THREE.Box3().setFromObject(model, true);
+    if (Number.isFinite(bounds.min.y)) {
+      model.position.y += this.mesh.position.y - bounds.min.y;
+      model.updateMatrixWorld(true);
     }
   }
 
@@ -180,13 +244,45 @@ export class Player {
     colliders: THREE.Box3[],
     isInsideBar: boolean
   ): void {
+    this.phoneCallWasCancelled = false;
     if (this.mixer && this.isLoaded) {
       this.mixer.update(deltaTime);
+      if (this.isGrounded) {
+        this.alignModelFeetToGround(this.mixer.getRoot());
+      }
     }
 
     if (this.isFallingDownstairs) {
       this.updateDownstairsFall(deltaTime);
       return;
+    }
+
+    const hasMovementInput =
+      input.isKeyDown('KeyW') || input.isKeyDown('ArrowUp') ||
+      input.isKeyDown('KeyS') || input.isKeyDown('ArrowDown') ||
+      input.isKeyDown('KeyA') || input.isKeyDown('ArrowLeft') ||
+      input.isKeyDown('KeyD') || input.isKeyDown('ArrowRight');
+    if (this.isMakingPhoneCall && hasMovementInput) {
+      this.isMakingPhoneCall = false;
+      this.phoneCallWasCancelled = true;
+      this.phoneCallAction?.fadeOut(0.1);
+      if (this.currentAction === this.phoneCallAction) this.currentAction = null;
+    }
+
+    if (this.isMakingPhoneCall) {
+      this.phoneCallElapsed += deltaTime;
+      if (this.phoneCallElapsed < this.phoneCallDuration) {
+        this.velocity.x = 0;
+        this.velocity.z = 0;
+        this.velocity.y += this.gravity * deltaTime;
+        this.moveVerticalAxis(this.velocity.y * deltaTime, colliders);
+        return;
+      }
+      this.isMakingPhoneCall = false;
+      this.phoneCallWasCancelled = true;
+      this.phoneCallAction?.fadeOut(0.1);
+      if (this.currentAction === this.phoneCallAction) this.currentAction = null;
+      this.setAnimation(this.idleAction, 0.15);
     }
 
     if (this.isDancing && (!isInsideBar || !this.danceAction?.isRunning())) {

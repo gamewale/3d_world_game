@@ -96,10 +96,6 @@ export class MissionManager {
         'TRAPPED!',
         'Explore the Villa rooms & upstairs terrace to find the hidden gate override button'
       );
-      this.hud.showBanner(
-        "ARE BAAP RE! The Main Gate just slammed shut and locked behind you!",
-        5000
-      );
     }
 
     // 2. Trigger victory once the player exits past the Main Gate back onto the street (Z > 21.5)

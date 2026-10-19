@@ -46,7 +46,7 @@ export class InputManager {
     const promptEl = document.getElementById('controls-hint');
     if (promptEl) {
       promptEl.textContent = this.isPointerLocked
-        ? 'WASD: Move | Shift: Sprint | Space: Jump | V: Change View | Mouse: Look | ESC: Unlock Cursor'
+        ? 'WASD: Move | Shift: Sprint | Space: Jump | C: Pick Up Call | V: Change View | Mouse: Look | ESC: Unlock Cursor'
         : 'Click anywhere on the screen to lock mouse & control player';
     }
   };

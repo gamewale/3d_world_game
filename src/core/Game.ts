@@ -102,6 +102,10 @@ export class Game {
     // Move NPCs and refresh their colliders before resolving player movement.
     this.world.update(worldDeltaTime, this.player.mesh.position);
 
+    if (this.input.wasKeyJustPressed('KeyC') && this.player.playPhoneCallAnimation()) {
+      this.soundManager.playPhoneCallSound();
+    }
+
     this.player.update(
       deltaTime,
       this.input,
@@ -109,6 +113,9 @@ export class Game {
       this.world.colliders,
       this.world.isPlayerInsideBar(this.player.mesh.position)
     );
+    if (this.player.phoneCallWasCancelledThisFrame) {
+      this.soundManager.stopPhoneCallSound();
+    }
 
     const biscuitCartPosition = this.world.biscuitCartPosition;
     if (biscuitCartPosition) {
