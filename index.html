@@ -11,10 +11,9 @@
 
     <!-- HUD Overlay -->
     <div id="hud">
-      <div id="top-bar">
-        <span id="phase-badge" class="badge">OBJECTIVE</span>
-        <span id="objective-text">Walk through the Main Gate to check out the mysterious Villa</span>
-      </div>
+      <aside id="minimap-panel" aria-label="City minimap">
+        <canvas id="city-minimap" width="240" height="240"></canvas>
+      </aside>
 
       <div id="center-notifications">
         <div id="status-banner" class="hidden"></div>
@@ -25,11 +24,6 @@
         Bar Music: N Next Track · P Previous Track · D Dance
       </div>
 
-      <div id="bottom-bar">
-        <span id="controls-hint">
-          Click to lock mouse | WASD: Move | Shift: Sprint | Space: Jump | C: Pick Up Call
-        </span>
-      </div>
     </div>
 
     <script type="module" src="/src/main.ts"></script>

@@ -20,6 +20,7 @@ export class Player {
 
   // Animation system
   private mixer: THREE.AnimationMixer | null = null;
+  private characterModel: THREE.Object3D | null = null;
   private idleAction: THREE.AnimationAction | null = null;
   private walkAction: THREE.AnimationAction | null = null;
   private runAction: THREE.AnimationAction | null = null;
@@ -57,6 +58,17 @@ export class Player {
     return this.phoneCallWasCancelled;
   }
 
+  public setVehicleMode(active: boolean): void {
+    this.mesh.scale.set(1, active ? 0.62 : 1, 1);
+    this.velocity.set(0, 0, 0);
+  }
+
+  public updateInVehicle(position: THREE.Vector3, yaw: number, deltaTime: number): void {
+    this.mesh.position.copy(position);
+    this.mesh.rotation.y = yaw - Math.PI / 2;
+    this.mixer?.update(deltaTime);
+  }
+
   private loadCharacterModel(): void {
     const loader = new FBXLoader();
 
@@ -78,6 +90,7 @@ export class Player {
         this.alignModelFeetToGround(fbx);
 
         this.mesh.add(fbx);
+        this.characterModel = fbx;
 
         this.mixer = new THREE.AnimationMixer(fbx);
 
@@ -247,8 +260,8 @@ export class Player {
     this.phoneCallWasCancelled = false;
     if (this.mixer && this.isLoaded) {
       this.mixer.update(deltaTime);
-      if (this.isGrounded) {
-        this.alignModelFeetToGround(this.mixer.getRoot());
+      if (this.isGrounded && this.characterModel) {
+        this.alignModelFeetToGround(this.characterModel);
       }
     }
 

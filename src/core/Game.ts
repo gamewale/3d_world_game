@@ -7,6 +7,7 @@ import { HUD } from '../ui/HUD';
 import { InteractionSystem } from '../systems/InteractionSystem';
 import { MissionManager } from '../systems/MissionManager';
 import { SoundManager } from './SoundManager';
+import { MiniMap } from '../ui/MiniMap';
 
 export class Game {
   private container: HTMLElement;
@@ -20,8 +21,10 @@ export class Game {
   private hud: HUD;
   private interactionSystem: InteractionSystem;
   private soundManager: SoundManager;
+  private miniMap: MiniMap;
   private missionManager: MissionManager;
   private wasPlayerFalling = false;
+  private isDriving = false;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -40,7 +43,7 @@ export class Game {
       60,
       window.innerWidth / window.innerHeight,
       0.1,
-      300
+      1600
     );
 
     this.world = new World();
@@ -51,6 +54,7 @@ export class Game {
     this.thirdPersonCamera = new ThirdPersonCamera(this.camera, this.player.mesh);
 
     this.hud = new HUD();
+    this.miniMap = new MiniMap();
     this.interactionSystem = new InteractionSystem(this.hud);
     this.soundManager = new SoundManager();
     this.missionManager = new MissionManager(
@@ -106,12 +110,46 @@ export class Game {
       this.soundManager.playPhoneCallSound();
     }
 
-    this.player.update(
-      deltaTime,
-      this.input,
-      this.thirdPersonCamera.yaw,
-      this.world.colliders,
-      this.world.isPlayerInsideBar(this.player.mesh.position)
+    if (this.isDriving && this.input.wasKeyJustPressed('KeyF')) {
+      const exitPosition = this.world.getCarExitPosition(new THREE.Vector3());
+      if (exitPosition) this.player.mesh.position.copy(exitPosition);
+      this.player.setVehicleMode(false);
+      this.isDriving = false;
+    } else if (
+      !this.isDriving &&
+      this.input.wasKeyJustPressed('KeyF') &&
+      this.world.car &&
+      this.player.mesh.position.distanceTo(this.world.car.position) < 3.6
+    ) {
+      this.isDriving = true;
+      this.player.setVehicleMode(true);
+    }
+
+    if (this.isDriving && this.world.car) {
+      const throttle =
+        (this.input.isKeyDown('KeyW') || this.input.isKeyDown('ArrowUp') ? 1 : 0) -
+        (this.input.isKeyDown('KeyS') || this.input.isKeyDown('ArrowDown') ? 1 : 0);
+      const steering =
+        (this.input.isKeyDown('KeyD') || this.input.isKeyDown('ArrowRight') ? 1 : 0) -
+        (this.input.isKeyDown('KeyA') || this.input.isKeyDown('ArrowLeft') ? 1 : 0);
+      this.world.updateCar(deltaTime, throttle, steering);
+      const seatPosition = this.world.getCarSeatPosition(new THREE.Vector3());
+      if (seatPosition) {
+        this.player.updateInVehicle(seatPosition, this.world.car.rotation.y, deltaTime);
+      }
+    } else {
+      this.player.update(
+        deltaTime,
+        this.input,
+        this.thirdPersonCamera.yaw,
+        this.world.colliders,
+        this.world.isPlayerInsideBar(this.player.mesh.position)
+      );
+    }
+    this.miniMap.update(
+      this.player.mesh.position.x,
+      this.player.mesh.position.z,
+      this.player.mesh.rotation.y
     );
     if (this.player.phoneCallWasCancelledThisFrame) {
       this.soundManager.stopPhoneCallSound();
@@ -140,7 +178,17 @@ export class Game {
       this.world.colliders
     );
 
-    this.interactionSystem.update(this.player.mesh.position, this.input);
+    if (this.isDriving) {
+      this.hud.setInteractionPrompt('[F] Exit car · WASD / arrows to drive');
+    } else {
+      this.interactionSystem.update(this.player.mesh.position, this.input);
+      if (
+        this.world.car &&
+        this.player.mesh.position.distanceTo(this.world.car.position) < 3.6
+      ) {
+        this.hud.setInteractionPrompt('[F] Get in car');
+      }
+    }
     this.missionManager.update(this.input);
     if (this.world.pushDuckFromPlayer(this.player.mesh.position, deltaTime)) {
       this.soundManager.playDuckCollisionSound();

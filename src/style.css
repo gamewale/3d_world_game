@@ -36,33 +36,30 @@ canvas {
   padding: 20px;
 }
 
-#top-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  background: rgba(18, 8, 36, 0.82);
-  border: 2px solid #ff4ecd;
-  border-radius: 8px;
-  padding: 10px 16px;
-  color: #ffffff;
-  width: fit-content;
-  box-shadow: 0 4px 20px rgba(255, 78, 205, 0.25);
+#minimap-panel {
+  position: absolute;
+  top: auto;
+  right: auto;
+  bottom: 18px;
+  left: 18px;
+  width: 210px;
+  height: 210px;
+  padding: 0;
+  overflow: hidden;
+  border: 2px solid rgba(0, 245, 212, 0.75);
+  border-radius: 50%;
+  background: #237e99;
+  color: #e8fff5;
+  box-shadow: 0 5px 24px rgba(0, 0, 0, 0.42);
+  text-align: center;
 }
 
-.badge {
-  background: #ff4ecd;
-  color: #120824;
-  font-weight: 800;
-  font-size: 0.75rem;
-  padding: 4px 8px;
-  border-radius: 4px;
-  letter-spacing: 0.05em;
-}
-
-#objective-text {
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: #ffe6f7;
+#city-minimap {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
 }
 
 #center-notifications {
@@ -103,19 +100,6 @@ canvas {
   opacity: 0;
   transform: translateY(8px);
   pointer-events: none;
-}
-
-#bottom-bar {
-  align-self: center;
-  background: rgba(18, 8, 36, 0.82);
-  border: 1px solid rgba(0, 245, 212, 0.5);
-  border-radius: 999px;
-  padding: 8px 20px;
-  color: #00f5d4;
-  font-size: 0.85rem;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
 #bar-music-controls {

@@ -1,42 +1,36 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { VillaBuilder } from './VillaBuilder';
 import { MainGate } from './MainGate';
+import { CityMap, createGrassMaterial } from './CityMap';
 
 export class World {
   public readonly scene: THREE.Scene;
   public readonly colliders: THREE.Box3[] = [];
   public readonly mainGate: MainGate;
+  public car: THREE.Group | null = null;
 
   private builder: VillaBuilder;
   private secretButtonMesh: THREE.Mesh;
   private secretButtonMat: THREE.MeshStandardMaterial;
-  private groundMaterial: THREE.MeshStandardMaterial;
   private elapsedTime = 0;
   private isButtonPressed = false;
   private duckCollisionActive = false;
   private grannyCollisionActive = false;
   private readonly duckVelocity = new THREE.Vector3();
+  private carSpeed = 0;
 
   constructor() {
     this.scene = new THREE.Scene();
 
     this.scene.background = new THREE.Color(0x9bc9ed);
-    this.scene.fog = new THREE.Fog(0x9bc9ed, 100, 260);
+    this.scene.fog = new THREE.Fog(0x9bc9ed, 220, 1050);
     this.setupSky();
 
     this.setupLights();
 
-    // Fallback brown mud material before the GLTF textures finish loading
-    this.groundMaterial = new THREE.MeshStandardMaterial({
-      color: 0x3a2718,
-      roughness: 0.88,
-      metalness: 0.02,
-    });
-
-    this.setupGroundWithPoolCutout();
-    this.loadMudLeavesGLTF();
+    new CityMap(this.scene, createGrassMaterial());
 
     this.builder = new VillaBuilder(this.scene, this.colliders);
     this.builder.build();
@@ -56,88 +50,103 @@ export class World {
     this.mainGate = new MainGate(20);
     this.scene.add(this.mainGate.group);
     this.colliders.push(this.mainGate.collider);
+    this.loadRoadsideCar();
   }
 
-  private loadMudLeavesGLTF(): void {
+  private loadRoadsideCar(): void {
     const loader = new GLTFLoader();
-    const primaryPath =
-      '/brown_mud_leaves_01_1k.gltf/brown_mud_leaves_01_1k.gltf';
-    const fallbackPath = '/brown_mud_leaves_01_1k.gltf';
+    const addCar = (gltf: { scene: THREE.Group }): void => {
+      const car = gltf.scene;
+      car.updateMatrixWorld(true);
+      const initialBounds = new THREE.Box3().setFromObject(car);
+      const size = initialBounds.getSize(new THREE.Vector3());
+      const horizontalLength = Math.max(size.x, size.z);
 
-    const applyLoadedGLTF = (gltfScene: THREE.Group) => {
-      let sourceMat: THREE.MeshStandardMaterial | null = null;
+      if (horizontalLength > 0) {
+        car.scale.multiplyScalar(5.4 / horizontalLength);
+      }
 
-      gltfScene.traverse((child) => {
-        if (
-          (child as THREE.Mesh).isMesh &&
-          (child as THREE.Mesh).material &&
-          !sourceMat
-        ) {
-          const mat = (child as THREE.Mesh).material;
-          if (Array.isArray(mat)) {
-            sourceMat = mat[0] as THREE.MeshStandardMaterial;
-          } else {
-            sourceMat = mat as THREE.MeshStandardMaterial;
+      // Keep the longest axis parallel to the street and settle the wheels on
+      // the road surface, regardless of the model's original origin.
+      if (size.z > size.x) car.rotation.y = Math.PI / 2;
+      car.updateMatrixWorld(true);
+      const bounds = new THREE.Box3().setFromObject(car);
+      const center = bounds.getCenter(new THREE.Vector3());
+      car.position.x -= center.x;
+      car.position.y -= bounds.min.y;
+      car.position.z -= center.z;
+
+      const parkedCar = new THREE.Group();
+      parkedCar.position.set(0, 0.04, 29);
+      parkedCar.add(car);
+      car.traverse((object) => {
+        if (object instanceof THREE.Mesh) {
+          object.castShadow = true;
+          object.receiveShadow = true;
+
+          const materials = Array.isArray(object.material)
+            ? object.material
+            : [object.material];
+          for (const material of materials) {
+            const materialName = material.name.toLowerCase();
+            const isCarPaint =
+              material instanceof THREE.MeshStandardMaterial &&
+              (materialName.includes('carpaint') || materialName.includes('metallic_paint'));
+            if (isCarPaint) {
+              material.color.set('#087bff');
+              material.metalness = 0.72;
+              material.roughness = 0.24;
+            }
           }
         }
       });
-
-      if (!sourceMat) {
-        console.warn(
-          'brown_mud_leaves_01_1k.gltf loaded, but no MeshStandardMaterial found.'
-        );
-        return;
-      }
-
-      const foundMat = sourceMat as THREE.MeshStandardMaterial;
-
-      const maps: (THREE.Texture | null)[] = [
-        foundMat.map,
-        foundMat.normalMap,
-        foundMat.roughnessMap,
-        foundMat.metalnessMap,
-        foundMat.aoMap,
-      ];
-
-      for (const tex of maps) {
-        if (tex) {
-          tex.wrapS = THREE.RepeatWrapping;
-          tex.wrapT = THREE.RepeatWrapping;
-          tex.needsUpdate = true;
-        }
-      }
-
-      this.groundMaterial.color.setHex(0xffffff);
-      this.groundMaterial.map = foundMat.map;
-      this.groundMaterial.normalMap = foundMat.normalMap;
-      this.groundMaterial.normalScale.set(1.2, 1.2);
-      this.groundMaterial.roughnessMap = foundMat.roughnessMap;
-      this.groundMaterial.metalnessMap = foundMat.metalnessMap;
-      this.groundMaterial.aoMap = foundMat.aoMap;
-      this.groundMaterial.aoMapIntensity = 0.8;
-      this.groundMaterial.roughness = foundMat.roughness ?? 0.85;
-      this.groundMaterial.metalness = foundMat.metalness ?? 0.02;
-      this.groundMaterial.needsUpdate = true;
+      this.car = parkedCar;
+      this.scene.add(parkedCar);
     };
 
     loader.load(
-      primaryPath,
-      (gltf) => applyLoadedGLTF(gltf.scene),
+      '/models/Lamborghini%2BTemerario.glb',
+      addCar,
       undefined,
-      () => {
+      (error) => {
+        console.error('Could not load encoded Lamborghini model path; retrying filename as-is.', error);
         loader.load(
-          fallbackPath,
-          (gltf) => applyLoadedGLTF(gltf.scene),
+          '/models/Lamborghini+Temerario.glb',
+          addCar,
           undefined,
-          (err) => {
-            console.warn(
-              'Could not load brown_mud_leaves_01_1k.gltf. Ensure folder is at public/brown_mud_leaves_01_1k.gltf/',
-              err
-            );
-          }
+          (fallbackError) => console.error('Could not load Lamborghini car model.', fallbackError)
         );
       }
     );
+  }
+
+  public updateCar(deltaTime: number, throttle: number, steering: number): void {
+    if (!this.car) return;
+
+    if (throttle !== 0) {
+      this.carSpeed += throttle * 9 * deltaTime;
+    } else {
+      this.carSpeed *= Math.exp(-1.5 * deltaTime);
+    }
+    this.carSpeed = THREE.MathUtils.clamp(this.carSpeed, -6, 18);
+
+    if (Math.abs(this.carSpeed) > 0.15) {
+      this.car.rotation.y -= steering * Math.sign(this.carSpeed) *
+        Math.min(Math.abs(this.carSpeed) / 8, 1) * 1.2 * deltaTime;
+    }
+
+    this.car.position.x -= Math.cos(this.car.rotation.y) * this.carSpeed * deltaTime;
+    this.car.position.z += Math.sin(this.car.rotation.y) * this.carSpeed * deltaTime;
+  }
+
+  public getCarSeatPosition(target: THREE.Vector3): THREE.Vector3 | null {
+    if (!this.car) return null;
+    return this.car.localToWorld(target.set(0.45, 0.48, 0.38));
+  }
+
+  public getCarExitPosition(target: THREE.Vector3): THREE.Vector3 | null {
+    if (!this.car) return null;
+    return this.car.localToWorld(target.set(0, 0, 2.3));
   }
 
   public setButtonPressed(pressed: boolean): void {
@@ -191,47 +200,6 @@ export class World {
     const sunPosition = new THREE.Vector3(-0.45, 0.72, -0.52).normalize();
     uniforms['sunPosition'].value.copy(sunPosition);
     this.scene.add(sky);
-  }
-
-  /**
-   * Builds the ground plane in 4 sections around the sunken swimming pool hole
-   * (Pool opening is X = 7 to 16, Z = 4 to 14) using the PBR ground material with scaled UV repeat.
-   */
-  private setupGroundWithPoolCutout(): void {
-    const addGroundPatch = (
-      width: number,
-      depth: number,
-      centerX: number,
-      centerZ: number
-    ) => {
-      const geo = new THREE.PlaneGeometry(width, depth);
-
-      // Scale UVs so 1 full mud/leaves texture tile covers 4m x 4m of ground area
-      const tileMeters = 4.0;
-      const uvAttr = geo.attributes.uv as THREE.BufferAttribute;
-      for (let i = 0; i < uvAttr.count; i++) {
-        const u = uvAttr.getX(i);
-        const v = uvAttr.getY(i);
-        uvAttr.setXY(i, (u * width) / tileMeters, (v * depth) / tileMeters);
-      }
-      uvAttr.needsUpdate = true;
-      geo.setAttribute('uv2', uvAttr.clone());
-
-      const mesh = new THREE.Mesh(geo, this.groundMaterial);
-      mesh.rotation.x = -Math.PI / 2;
-      mesh.position.set(centerX, 0, centerZ);
-      mesh.receiveShadow = true;
-      this.scene.add(mesh);
-    };
-
-    // 1. West of pool
-    addGroundPatch(107, 200, -46.5, 0);
-    // 2. East of pool
-    addGroundPatch(84, 200, 58, 0);
-    // 3. North of pool
-    addGroundPatch(9, 104, 11.5, -48);
-    // 4. South of pool
-    addGroundPatch(9, 86, 11.5, 57);
   }
 
   public update(deltaTime: number, playerPosition: THREE.Vector3): void {
