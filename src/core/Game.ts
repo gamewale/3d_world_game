@@ -8,6 +8,7 @@ import { InteractionSystem } from '../systems/InteractionSystem';
 import { MissionManager } from '../systems/MissionManager';
 import { SoundManager } from './SoundManager';
 import { MiniMap } from '../ui/MiniMap';
+import { getNorthernCoastZ } from '../world/CityMap';
 
 export class Game {
   private container: HTMLElement;
@@ -48,7 +49,10 @@ export class Game {
 
     this.world = new World();
     this.input = new InputManager(this.renderer.domElement);
-    this.player = new Player(new THREE.Vector3(0, 0, 26));
+    this.player = new Player(
+      new THREE.Vector3(0, 2, getNorthernCoastZ(0) + 13),
+      (x, z) => this.world.getGroundHeightAt(x, z)
+    );
     this.world.scene.add(this.player.mesh);
 
     this.thirdPersonCamera = new ThirdPersonCamera(this.camera, this.player.mesh);

@@ -2,8 +2,9 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { VillaBuilder } from './VillaBuilder';
 import { MainGate } from './MainGate';
-import { CityMap, createGrassMaterial } from './CityMap';
+import { CityMap, createGrassMaterial, getIslandGroundHeight, getNorthernCoastPosition } from './CityMap';
 import { WeatherSystem } from './WeatherSystem';
+import { MarineDriveNPC } from '../entities/MarineDriveNPC';
 
 export class World {
   public readonly scene: THREE.Scene;
@@ -20,6 +21,7 @@ export class World {
   private duckCollisionActive = false;
   private grannyCollisionActive = false;
   private readonly duckVelocity = new THREE.Vector3();
+  private readonly marineDriveNpcs: MarineDriveNPC[] = [];
   private carSpeed = 0;
 
   constructor() {
@@ -27,7 +29,8 @@ export class World {
 
     this.weather = new WeatherSystem(this.scene);
 
-    new CityMap(this.scene, createGrassMaterial());
+    new CityMap(this.scene, createGrassMaterial(), this.colliders);
+    this.addMarineDriveNpcs();
 
     this.builder = new VillaBuilder(this.scene, this.colliders);
     this.builder.build();
@@ -121,11 +124,11 @@ export class World {
     if (!this.car) return;
 
     if (throttle !== 0) {
-      this.carSpeed += throttle * 9 * deltaTime;
+      this.carSpeed += throttle * 27 * deltaTime;
     } else {
       this.carSpeed *= Math.exp(-1.5 * deltaTime);
     }
-    this.carSpeed = THREE.MathUtils.clamp(this.carSpeed, -6, 18);
+    this.carSpeed = THREE.MathUtils.clamp(this.carSpeed, -18, 54);
 
     if (Math.abs(this.carSpeed) > 0.15) {
       this.car.rotation.y -= steering * Math.sign(this.carSpeed) *
@@ -138,6 +141,10 @@ export class World {
 
   public get currentCarSpeed(): number {
     return this.carSpeed;
+  }
+
+  public getGroundHeightAt(x: number, z: number): number {
+    return getIslandGroundHeight(x, z);
   }
 
   public cycleWeather(): string {
@@ -178,6 +185,7 @@ export class World {
     this.builder.grannyNpc?.update(deltaTime);
     this.builder.barReceptionist?.update(deltaTime);
     this.builder.updateBarScene(deltaTime);
+    this.marineDriveNpcs.forEach((npc) => npc.update(deltaTime));
 
     if (!this.isButtonPressed) {
       this.secretButtonMat.emissiveIntensity =
@@ -196,6 +204,47 @@ export class World {
         Math.PI / 2 + Math.sin(this.elapsedTime * 0.8) * 0.35;
     }
 
+  }
+
+  private addMarineDriveNpcs(): void {
+    const char2 = '/character%20(2).fbx';
+    const char3 = '/character%20(3).fbx';
+    const sitAnimation = '/Sitting.fbx';
+    const walkAnimation = '/models/Walking.fbx';
+    const platformTop = 2.1;
+    // Keep the seated body on the deck, with the legs facing over its ocean edge.
+    const seatOffset = 19.2;
+
+    const sitters = [
+      { character: char2, x: -22 },
+      { character: char3, x: 22 },
+    ];
+    sitters.forEach(({ character, x }) => {
+      const sitter = new MarineDriveNPC(
+        character,
+        sitAnimation,
+        getNorthernCoastPosition(x, seatOffset, platformTop),
+        0
+      );
+      this.marineDriveNpcs.push(sitter);
+      this.scene.add(sitter.group);
+    });
+
+    const walkers = [
+      { character: char2, startX: -72, direction: 1 as const, speed: 1.25 },
+      { character: char3, startX: 72, direction: -1 as const, speed: 1.05 },
+    ];
+    walkers.forEach(({ character, startX, direction, speed }) => {
+      const walker = new MarineDriveNPC(
+        character,
+        walkAnimation,
+        getNorthernCoastPosition(startX, 9, 2),
+        0,
+        { minX: -112, maxX: 112, speed, coastOffset: 9, direction }
+      );
+      this.marineDriveNpcs.push(walker);
+      this.scene.add(walker.group);
+    });
   }
 
   public get biscuitCartPosition(): THREE.Vector3 | null {

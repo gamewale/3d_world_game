@@ -39,7 +39,10 @@ export class Player {
   private readonly downstairsFallDuration = 3.2;
   private readonly fallStartPosition = new THREE.Vector3();
 
-  constructor(startPosition = new THREE.Vector3(0, 0, 26)) {
+  constructor(
+    startPosition = new THREE.Vector3(0, 0, 26),
+    private readonly groundHeightAt: (x: number, z: number) => number = () => 0
+  ) {
     this.mesh = new THREE.Group();
     this.mesh.position.copy(startPosition);
 
@@ -187,6 +190,7 @@ export class Player {
     }, undefined, (err) => {
       console.warn('Could not load /models/Talking On A Cell Phone.fbx:', err);
     });
+
   }
 
   public playPhoneCallAnimation(): boolean {
@@ -496,7 +500,9 @@ export class Player {
 
     if (deltaY <= 0) {
       // The pool basin top is at -1.25m; let the player walk on that bottom.
-      let highestFloor = this.isOverPoolBasin() ? -1.25 : 0;
+      let highestFloor = this.isOverPoolBasin()
+        ? -1.25
+        : this.groundHeightAt(this.mesh.position.x, this.mesh.position.z);
 
       for (const box of hitBoxes) {
         if (prevY >= box.max.y - 0.25 && box.max.y > highestFloor) {

@@ -69,7 +69,7 @@ const PRESET_STATES: Record<WeatherPreset, WeatherState> = {
     0xd9edff, 0x77735f, 1.35, 0xfff4dc, 2.6, 0x9bc9ed, 220, 1050
   ),
   'Golden Hour': makeState(
-    0xb65a3e, 0xf18c85, 0xf57b32, 0xf5480d, [-0.68, 0.12, -0.72], 2.65,
+    0xb65a3e, 0xf18c85, 0xf57b32, 0xf5480d, [0, 0.12, 1], 2.65,
     0xe9a78f, 0x745044, 0.95, 0xff6c27, 3.1, 0xd88a78, 110, 760
   ),
   Overcast: makeState(

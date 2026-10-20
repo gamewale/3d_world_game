@@ -5,6 +5,7 @@ import { HUD } from '../ui/HUD';
 import { InteractionSystem } from './InteractionSystem';
 import { InputManager } from '../core/InputManager';
 import { SoundManager } from '../core/SoundManager';
+import { getNorthernCoastZ } from '../world/CityMap';
 
 export enum MissionState {
   OUTSIDE_START = 'OUTSIDE_START',
@@ -47,7 +48,7 @@ export class MissionManager {
 
   public resetMission(): void {
     this.state = MissionState.OUTSIDE_START;
-    this.player.mesh.position.set(0, 0, 26);
+    this.player.mesh.position.set(0, 2, getNorthernCoastZ(0) + 13);
     this.player.velocity.set(0, 0, 0);
 
     this.world.mainGate.setOpen(true);

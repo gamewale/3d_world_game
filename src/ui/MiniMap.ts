@@ -2,6 +2,7 @@ import {
   CITY_ROAD_NETWORK,
   CITY_MINIMAP_HALF_SIZE,
   createIslandOutline,
+  getNorthernCoastZ,
   makeRoadCurve,
 } from '../world/CityMap';
 
@@ -67,6 +68,55 @@ export class MiniMap {
     this.context.restore();
     const ctx = this.context;
 
+    // Keep the promenade destination visible even when it falls outside the
+    // minimap's zoomed-in crop. The whole map rotates, so rotate this bearing too.
+    const targetX = 0;
+    const targetZ = getNorthernCoastZ(0) + 10;
+    const zoom = this.size / this.viewRadius;
+    const mapDx = -(targetX - x) * zoom;
+    const mapDy = -(targetZ - z) * zoom;
+    const cos = Math.cos(this.mapRotation);
+    const sin = Math.sin(this.mapRotation);
+    const bearingX = mapDx * cos - mapDy * sin;
+    const bearingY = mapDx * sin + mapDy * cos;
+    const bearingLength = Math.hypot(bearingX, bearingY);
+    const markerDistance = Math.min(bearingLength, this.size * 0.39);
+    const markerX = bearingLength > 0 ? (bearingX / bearingLength) * markerDistance : 0;
+    const markerY = bearingLength > 0 ? (bearingY / bearingLength) * markerDistance : -markerDistance;
+
+    if (Math.hypot(targetX - x, targetZ - z) > 48) {
+      ctx.save();
+      ctx.translate(this.size / 2, this.size / 2);
+      // Arrow points from the player toward the destination badge.
+      const angle = Math.atan2(markerY, markerX);
+      ctx.translate(markerX, markerY);
+      ctx.rotate(angle + Math.PI / 2);
+      ctx.fillStyle = '#f3e7c9';
+      ctx.beginPath();
+      ctx.moveTo(0, -14);
+      ctx.lineTo(-6, -5);
+      ctx.lineTo(6, -5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+
+      ctx.save();
+      ctx.translate(this.size / 2 + markerX, this.size / 2 + markerY);
+      ctx.beginPath();
+      ctx.arc(0, 0, 10, 0, Math.PI * 2);
+      ctx.fillStyle = '#087f8c';
+      ctx.fill();
+      ctx.strokeStyle = '#f3e7c9';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 13px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('M', 0, 0.5);
+      ctx.restore();
+    }
+
     ctx.save();
     ctx.translate(this.size / 2, this.size / 2);
     // Keep the marker pointed upward while the entire map turns underneath.
@@ -113,6 +163,18 @@ export class MiniMap {
     ctx.save();
     ctx.translate(size, 0);
     ctx.scale(-1, 1);
+    ctx.strokeStyle = '#292d30';
+    ctx.lineWidth = this.worldLengthToMap(22);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    for (let x = -228; x <= 228; x += 4) {
+      const z = getNorthernCoastZ(x) - 42;
+      const mapped = this.worldToMap(x, z);
+      if (x === -228) ctx.moveTo(mapped.x, mapped.y);
+      else ctx.lineTo(mapped.x, mapped.y);
+    }
+    ctx.stroke();
     for (const road of this.roads) {
       const curve = makeRoadCurve(road);
       const segments = Math.max(2, Math.ceil(curve.getLength() / 6));
