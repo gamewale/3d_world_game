@@ -14,6 +14,7 @@ export class MiniMap {
   private readonly size = 190;
   private readonly baseSize = 1024;
   private readonly viewRadius = 170;
+  private mapRotation = 0;
 
   constructor() {
     this.canvas = document.getElementById('city-minimap') as HTMLCanvasElement;
@@ -27,28 +28,48 @@ export class MiniMap {
     this.drawBaseMap();
   }
 
-  public update(x: number, z: number, facingAngle: number): void {
+  public update(
+    x: number,
+    z: number,
+    heading: number,
+    deltaTime: number,
+    trackHeading = true
+  ): void {
+    if (trackHeading) {
+      const headingError = Math.atan2(
+        Math.sin(heading - this.mapRotation),
+        Math.cos(heading - this.mapRotation)
+      );
+      if (Math.abs(headingError) > 0.015) {
+        const response = Math.abs(headingError) > Math.PI / 2 ? 11 : 7;
+        this.mapRotation += headingError * (1 - Math.exp(-response * deltaTime));
+      }
+    }
+
     this.context.clearRect(0, 0, this.size, this.size);
     const mapCenter = this.worldToMap(x, z);
     mapCenter.x = this.baseSize - mapCenter.x;
     const sourceSize = (this.viewRadius / CITY_MINIMAP_HALF_SIZE) * this.baseSize;
+    this.context.save();
+    this.context.translate(this.size / 2, this.size / 2);
+    this.context.rotate(this.mapRotation);
     this.context.drawImage(
       this.baseCanvas,
       mapCenter.x - sourceSize / 2,
       mapCenter.y - sourceSize / 2,
       sourceSize,
       sourceSize,
-      0,
-      0,
+      -this.size / 2,
+      -this.size / 2,
       this.size,
       this.size
     );
+    this.context.restore();
     const ctx = this.context;
 
     ctx.save();
     ctx.translate(this.size / 2, this.size / 2);
-    // Keep the map north-up and rotate only the player pointer to match yaw.
-    ctx.rotate(-facingAngle);
+    // Keep the marker pointed upward while the entire map turns underneath.
     ctx.fillStyle = '#f8fbff';
     ctx.beginPath();
     ctx.moveTo(0, -9);

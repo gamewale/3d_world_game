@@ -149,7 +149,11 @@ export class Game {
     this.miniMap.update(
       this.player.mesh.position.x,
       this.player.mesh.position.z,
-      this.player.mesh.rotation.y
+      this.isDriving && this.world.car
+        ? this.world.car.rotation.y - Math.PI / 2
+        : this.player.mesh.rotation.y,
+      deltaTime,
+      !this.isDriving || Math.abs(this.world.currentCarSpeed) > 0.15
     );
     if (this.player.phoneCallWasCancelledThisFrame) {
       this.soundManager.stopPhoneCallSound();

@@ -139,6 +139,10 @@ export class World {
     this.car.position.z += Math.sin(this.car.rotation.y) * this.carSpeed * deltaTime;
   }
 
+  public get currentCarSpeed(): number {
+    return this.carSpeed;
+  }
+
   public getCarSeatPosition(target: THREE.Vector3): THREE.Vector3 | null {
     if (!this.car) return null;
     return this.car.localToWorld(target.set(0.45, 0.48, 0.38));
