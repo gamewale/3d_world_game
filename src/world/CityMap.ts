@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { applyWaterAsset } from './WaterAsset';
 
 export const CITY_MAP_HALF_SIZE = 600;
 export const CITY_MINIMAP_HALF_SIZE = 1100;
@@ -229,6 +230,7 @@ export class CityMap {
       emissive: 0x052c3c,
       emissiveIntensity: 0.28,
     });
+    applyWaterAsset(material, 0.08);
     const water = new THREE.Mesh(geometry, material);
     water.rotation.x = -Math.PI / 2;
     water.position.y = -0.36;
@@ -239,6 +241,7 @@ export class CityMap {
   private addShore(scene: THREE.Scene): void {
     const outline = createIslandOutline();
     const positions: number[] = [];
+    const uvs: number[] = [];
     const indices: number[] = [];
     const innerScale = 0.985;
     const outerScale = 1.04;
@@ -253,18 +256,45 @@ export class CityMap {
         next[0] * outerScale, waterline, next[1] * outerScale,
         x * outerScale, waterline, z * outerScale
       );
+      uvs.push(
+        x / 8, z / 8,
+        next[0] / 8, next[1] / 8,
+        next[0] * outerScale / 8, next[1] * outerScale / 8,
+        x * outerScale / 8, z * outerScale / 8
+      );
       indices.push(start, start + 1, start + 2, start, start + 2, start + 3);
     });
 
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
     geometry.setIndex(indices);
     geometry.computeVertexNormals();
+
+    const textureLoader = new THREE.TextureLoader();
+    const sandColor = textureLoader.load('/gravelly_sand_1k.gltf/textures/gravelly_sand_diff_1k.jpg');
+    sandColor.colorSpace = THREE.SRGBColorSpace;
+    sandColor.wrapS = THREE.RepeatWrapping;
+    sandColor.wrapT = THREE.RepeatWrapping;
+    const sandNormal = textureLoader.load('/gravelly_sand_1k.gltf/textures/gravelly_sand_nor_gl_1k.jpg');
+    sandNormal.colorSpace = THREE.NoColorSpace;
+    sandNormal.wrapS = THREE.RepeatWrapping;
+    sandNormal.wrapT = THREE.RepeatWrapping;
+    const sandArm = textureLoader.load('/gravelly_sand_1k.gltf/textures/gravelly_sand_arm_1k.jpg');
+    sandArm.colorSpace = THREE.NoColorSpace;
+    sandArm.wrapS = THREE.RepeatWrapping;
+    sandArm.wrapT = THREE.RepeatWrapping;
+
     const shore = new THREE.Mesh(
       geometry,
       new THREE.MeshStandardMaterial({
-        color: 0xbca56c,
-        roughness: 0.96,
+        color: 0xffffff,
+        map: sandColor,
+        normalMap: sandNormal,
+        normalScale: new THREE.Vector2(0.7, 0.7),
+        roughness: 1,
+        roughnessMap: sandArm,
+        metalness: 0,
         side: THREE.DoubleSide,
       })
     );
@@ -287,6 +317,7 @@ export class CityMap {
       roughness: 0.95,
       metalness: 0,
     });
+    roadMaterial.userData.weatherRoadSurface = true;
     const markingMaterial = new THREE.MeshStandardMaterial({
       color: 0xe8e7d8,
       roughness: 0.78,

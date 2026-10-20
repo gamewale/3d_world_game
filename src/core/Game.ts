@@ -106,6 +106,10 @@ export class Game {
     // Move NPCs and refresh their colliders before resolving player movement.
     this.world.update(worldDeltaTime, this.player.mesh.position);
 
+    if (this.input.wasKeyJustPressed('KeyQ')) {
+      this.hud.showBanner(`Weather: ${this.world.cycleWeather()}`, 2600);
+    }
+
     if (this.input.wasKeyJustPressed('KeyC') && this.player.playPhoneCallAnimation()) {
       this.soundManager.playPhoneCallSound();
     }

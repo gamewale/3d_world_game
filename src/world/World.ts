@@ -1,9 +1,9 @@
 import * as THREE from 'three';
-import { Sky } from 'three/examples/jsm/objects/Sky.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { VillaBuilder } from './VillaBuilder';
 import { MainGate } from './MainGate';
 import { CityMap, createGrassMaterial } from './CityMap';
+import { WeatherSystem } from './WeatherSystem';
 
 export class World {
   public readonly scene: THREE.Scene;
@@ -12,6 +12,7 @@ export class World {
   public car: THREE.Group | null = null;
 
   private builder: VillaBuilder;
+  private readonly weather: WeatherSystem;
   private secretButtonMesh: THREE.Mesh;
   private secretButtonMat: THREE.MeshStandardMaterial;
   private elapsedTime = 0;
@@ -24,11 +25,7 @@ export class World {
   constructor() {
     this.scene = new THREE.Scene();
 
-    this.scene.background = new THREE.Color(0x9bc9ed);
-    this.scene.fog = new THREE.Fog(0x9bc9ed, 220, 1050);
-    this.setupSky();
-
-    this.setupLights();
+    this.weather = new WeatherSystem(this.scene);
 
     new CityMap(this.scene, createGrassMaterial());
 
@@ -143,6 +140,10 @@ export class World {
     return this.carSpeed;
   }
 
+  public cycleWeather(): string {
+    return this.weather.cycle();
+  }
+
   public getCarSeatPosition(target: THREE.Vector3): THREE.Vector3 | null {
     if (!this.car) return null;
     return this.car.localToWorld(target.set(0.45, 0.48, 0.38));
@@ -167,47 +168,9 @@ export class World {
     }
   }
 
-  private setupLights(): void {
-    const hemiLight = new THREE.HemisphereLight(0xd9edff, 0x77735f, 1.35);
-    hemiLight.position.set(0, 50, 0);
-    this.scene.add(hemiLight);
-
-    const dirLight = new THREE.DirectionalLight(0xfff4dc, 2.6);
-    dirLight.position.set(-35, 55, -25);
-    dirLight.castShadow = true;
-
-    dirLight.shadow.mapSize.width = 2048;
-    dirLight.shadow.mapSize.height = 2048;
-    dirLight.shadow.camera.near = 0.5;
-    dirLight.shadow.camera.far = 120;
-
-    const d = 46;
-    dirLight.shadow.camera.left = -d;
-    dirLight.shadow.camera.right = d;
-    dirLight.shadow.camera.top = d;
-    dirLight.shadow.camera.bottom = -d;
-    dirLight.shadow.bias = -0.0005;
-
-    this.scene.add(dirLight);
-  }
-
-  private setupSky(): void {
-    const sky = new Sky();
-    sky.scale.setScalar(450000);
-
-    const uniforms = sky.material.uniforms;
-    uniforms['turbidity'].value = 2.2;
-    uniforms['rayleigh'].value = 1.8;
-    uniforms['mieCoefficient'].value = 0.004;
-    uniforms['mieDirectionalG'].value = 0.82;
-
-    const sunPosition = new THREE.Vector3(-0.45, 0.72, -0.52).normalize();
-    uniforms['sunPosition'].value.copy(sunPosition);
-    this.scene.add(sky);
-  }
-
   public update(deltaTime: number, playerPosition: THREE.Vector3): void {
     this.elapsedTime += deltaTime;
+    this.weather.update(deltaTime, playerPosition);
     this.mainGate.update(deltaTime);
     this.builder.barDoor.update(deltaTime, playerPosition);
     this.builder.bathroomDoor.update(deltaTime, playerPosition);

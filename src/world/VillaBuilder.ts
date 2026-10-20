@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { applyWaterAsset } from './WaterAsset';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { Granny } from '../entities/Granny';
 import { BarReceptionist } from '../entities/BarReceptionist';
@@ -530,6 +531,7 @@ export class VillaBuilder {
       opacity: 0.78,
       side: THREE.DoubleSide,
     });
+    applyWaterAsset(waterMat, 4);
     this.poolWaterMesh = new THREE.Mesh(waterGeo, waterMat);
     this.poolWaterMesh.rotation.x = -Math.PI / 2;
     this.poolWaterMesh.position.set(11.5, -0.14, 9.0);
@@ -759,7 +761,6 @@ export class VillaBuilder {
     const centerX = 18;
     const frontZ = -38.7;
     const backZ = -44.5;
-    const width = 6.4;
     const plinthHeight = 0.66;
     const roofY = 5.85;
     const stoneMat = new THREE.MeshStandardMaterial({ color: 0xf0e5d2, roughness: 0.82 });
